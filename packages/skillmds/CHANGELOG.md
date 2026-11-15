@@ -2,6 +2,11 @@
 
 All notable changes to `get-skill` (published as `skillmds` until 1.3.6) are documented here. Versions follow [semver](https://semver.org).
 
+## 1.3.12
+
+- **`--ref` and the registry fallbacks now read the skill's real source repository.** A registry slug is not a GitHub repo: `antfu/vite` lives in the `antfu/skills` repo. `add owner/name --ref <ref>` used to ask GitHub for a repo named `owner/name` and fail with a 404. It now reads the skill's source repository at that ref (a pack's whole folder, a single's SKILL.md) and records that GitHub source in the lock file, so `update` follows the same ref. A ref that can't be read, or a skill with no GitHub source repository, is an error; no other version is installed in its place.
+- **A registry skill is no longer looked up as `owner/name` on GitHub.** When the registry has the skill but can't serve its bundle (for example an oversized one), `add` reads the skill's source repository at the pinned commit, then falls back to the registry's own SKILL.md. A GitHub repo named `owner/name` is still read when the registry has no such skill, or can't be reached at all.
+
 ## 1.3.11
 
 - **Repository links point at github.com/skillmds/SkillMD,** the repo's new name: the package metadata, the MCP registry manifest and the READMEs. The old address still redirects. This also lets npm's provenance view resolve the source commit, and brings `skillmds` back in step with `get-skill`.
