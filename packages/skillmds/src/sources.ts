@@ -7,7 +7,9 @@ import { join } from "node:path";
 
 export type SourceSpec =
   | { kind: "local"; path: string; display: string }
-  | { kind: "slug"; owner: string; name: string; display: string }
+  // `ref` is the CLI's --ref. It does not make the slug a GitHub repo: the
+  // registry says where the skill really lives, and the ref is read there.
+  | { kind: "slug"; owner: string; name: string; ref?: string; display: string }
   // A registry collection — what the site calls a plugin. Distinct from the
   // repo's other sense of "pack": skills.type = 'pack' is a single multi-file
   // skill, which is why this is not called that.
@@ -16,7 +18,8 @@ export type SourceSpec =
   | { kind: "gist"; user: string; id: string; display: string };
 
 export interface ParseOptions {
-  /** Override/force the git ref (CLI --ref). */
+  /** Override the git ref of a GitHub source (CLI --ref). On a bare `owner/name`
+   *  it is carried on the registry slug instead; it never turns one into a repo. */
   ref?: string;
   /** Injected for tests; defaults to fs.existsSync. */
   exists?: (p: string) => boolean;
@@ -100,7 +103,11 @@ export function parseSource(arg: string, opts: ParseOptions = {}): SourceSpec {
   const repo = repoRaw!.replace(/\.git$/, "");
   const subpath = assertSubpath(subRaw);
   // Bare owner/name with nothing else is a registry slug first (GitHub is the fallback in add.ts).
-  if (!prefixed && !subpath && !ref && !skill && !opts.ref) return { kind: "slug", owner: owner!, name: repo, display: a };
+  // --ref does not change that: a slug is not a GitHub repo (antfu/vite lives in
+  // antfu/skills), so the ref rides along and is read from the skill's real source.
+  if (!prefixed && !subpath && !ref && !skill) {
+    return { kind: "slug", owner: owner!, name: repo, ...(opts.ref ? { ref: opts.ref } : {}), display: a };
+  }
   return withRef({ kind: "github" as const, owner: owner!, repo, ref: ref || undefined, subpath, skill: skill || undefined, display: a }, opts.ref);
 }
 

@@ -78,7 +78,7 @@ skillmd add some/skill --deny executes_scripts
 skillmd add some/skill --skip-lint
 ```
 
-Sources: a registry slug `owner/name`; a GitHub repo, subdirectory, ref (`#ref`) or named skill (`@skill`), including `tree/` and `blob/` URLs; `github:`/`gh:` to force the GitHub reading of a bare `owner/name`; a gist URL; or a local path. `--ref <ref>` overrides the ref on any GitHub source. GitLab and `git@` sources aren't supported — clone them and install from the path.
+Sources: a registry slug `owner/name`; a GitHub repo, subdirectory, ref (`#ref`) or named skill (`@skill`), including `tree/` and `blob/` URLs; `github:`/`gh:` to force the GitHub reading of a bare `owner/name`; a gist URL; or a local path. `--ref <ref>` overrides the ref on any GitHub source; for a registry slug it reads the skill's source repository (the repo and folder on its registry page) at that ref, not github.com/owner/name. GitLab and `git@` sources aren't supported — clone them and install from the path.
 
 **Where skills land.** One canonical copy, linked into each agent you chose:
 

@@ -5,8 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import pc from "picocolors";
 import { lint, parseSkillMd } from "@skillmds/core";
 import { createClient, skillMdFor, fetchBundle, IntegrityError, RegistryError, missingFilesNote } from "../api.js";
-import type { Client, RegistrySkill } from "../api.js";
-import { collectFiles, resolvePackFiles, resolveSource } from "../source.js";
+import type { BundleFile, Client, RegistrySkill } from "../api.js";
+import { collectFiles, resolvePackFiles, resolveSource, resolveTree } from "../source.js";
 import type { ResolvedSkill, TreeFile } from "../source.js";
 import { looksLikeProject } from "../project.js";
 import { agentDir, agentSupportsGlobal, detectAgents } from "../agents.js";
@@ -37,7 +37,8 @@ export interface AddFlags {
   project?: boolean;
   agent?: string[];
   skill?: string[];
-  /** Git ref (branch, tag, commit) for GitHub sources. Forces the GitHub route for `owner/name`. */
+  /** Git ref (branch, tag, commit) to read the source at. For a registry slug
+   *  that is the skill's source_repo, never github.com/<owner>/<name>. */
   ref?: string;
   /** Show what a source contains and install nothing. */
   list?: boolean;
@@ -197,12 +198,18 @@ export function registryUnreachableError(arg: string, host: string, e: RegistryE
 /** resolveSource() re-parses the raw argument and knows nothing about --ref, so
  *  a ref given on the command line is folded back into a shorthand it can parse.
  *  Only done when --ref was actually passed, and only for GitHub sources: every
- *  other argument reaches resolveSource() exactly as the user typed it. */
+ *  other argument reaches resolveSource() exactly as the user typed it.
+ *
+ *  A bare owner/name counts as a GitHub source here. This is only reached when
+ *  the registry has no such skill (a 404, or no answer at all), which is when
+ *  `owner/name` means the GitHub repo it names. */
 export function argWithRef(arg: string, ref?: string): string {
   if (!ref) return arg;
   try {
     const spec = parseSource(arg, { ref });
-    return spec.kind === "github" ? sourceId(spec) : arg;
+    if (spec.kind === "github") return sourceId(spec);
+    if (spec.kind === "slug") return sourceId({ kind: "github", owner: spec.owner, repo: spec.name, ref, display: spec.display });
+    return arg;
   } catch {
     return arg;
   }
@@ -230,21 +237,89 @@ export async function registryCandidate(
   name: string,
   source: string,
   client: Pick<Client, "api" | "base" | "token">,
-  hooks: Pick<SlugHooks, "fetchTree"> = {},
+  opts: CandidateOptions = {},
+): Promise<AddCandidate> {
+  const skill = await client.api<RegistrySkill>(`/api/skills/${owner}/${name}`);
+  return candidateFromRecord(skill, owner, name, source, client, opts);
+}
+
+interface CandidateOptions extends Pick<SlugHooks, "fetchTree"> {
+  /** --ref: read the skill's source_repo at this ref instead of the registry's copy. */
+  ref?: string;
+}
+
+/** The registry skill read from its own source_repo at the ref the user chose
+ *  (--ref). Fails rather than installing anything else: another version, or
+ *  github.com/<owner>/<name>, is not what was asked for. */
+async function resolveAtRef(
+  skill: Pick<RegistrySkill, "slug" | "type" | "source_repo">,
+  ref: string,
+  fetchTree: (url: string, ref?: string) => Promise<TreeFile[]> = resolveTree,
+): Promise<Pick<AddCandidate, "raw" | "files" | "source" | "commit_sha" | "note">> {
+  const repo = skill.source_repo;
+  if (!repo) {
+    throw new Error(`${skill.slug} has no source repository in the registry, so there is nothing to read at --ref ${ref}. Drop --ref to install the registry's copy.`);
+  }
+  // The registry supplies this string: it is only ever read as a GitHub URL,
+  // never as a local path (hence no existence check) or any other host.
+  let spec: SourceSpec | undefined;
+  try { spec = parseSource(repo, { ref, exists: () => false }); } catch { /* handled below */ }
+  if (spec?.kind !== "github") {
+    throw new Error(`${skill.slug}'s source repository (${repo}) is not a GitHub source, so --ref ${ref} can't read it. Drop --ref to install the registry's copy.`);
+  }
+  let files: TreeFile[];
+  try {
+    files = await fetchTree(repo, ref);
+  } catch (e) {
+    throw new Error(`could not read ${skill.slug}'s source (${repo}) at ref "${ref}": ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const sk = files.find((f) => f.path === "SKILL.md");
+  if (!sk) throw new Error(`no SKILL.md in ${skill.slug}'s source (${repo}) at ref "${ref}"`);
+  return {
+    raw: sk.contents.toString("utf8"),
+    // A pack brings its whole folder; a single is its SKILL.md, as it is from the registry.
+    ...(skill.type === "pack" ? { files } : {}),
+    // What was actually read, so `update` follows the same ref. A ref is not a commit.
+    source: sourceId(spec),
+    commit_sha: undefined,
+    note: `read from ${repo} at "${ref}" (--ref), not the registry-reviewed copy`,
+  };
+}
+
+/** One registry skill record becomes one candidate. Everything this reads from
+ *  GitHub comes from the record's source_repo: the slug `owner/name` is not a
+ *  GitHub repo (antfu/vite lives in antfu/skills), so it is never read as one. */
+async function candidateFromRecord(
+  skill: RegistrySkill,
+  owner: string,
+  name: string,
+  source: string,
+  client: Pick<Client, "api" | "base" | "token">,
+  opts: CandidateOptions,
 ): Promise<AddCandidate> {
   const registrySlug = `${owner}/${name}`;
-  const skill = await client.api<RegistrySkill>(`/api/skills/${owner}/${name}`);
   const skillName = skill.slug.split("/")[1] || name;
   const meta = {
     name: skillName, slug: skillName, registrySlug, source, commit_sha: skill.commit_sha ?? undefined,
     verified: skill.verified, type: skill.type, securityFlags: skill.security_flags,
   };
+  // --ref asks for the source at a ref the registry's pinned bundle can't hold.
+  if (opts.ref) return { ...meta, ...(await resolveAtRef(skill, opts.ref, opts.fetchTree)) };
   // Every registry skill installs from its bundle: registry-stored, SHA-pinned,
   // complete, and it survives upstream deletion/force-push. The type is not a
   // reliable sign of companion files (on 2026-11-09 some singles had ten), so
   // it is not asked; a single's bundle is just its SKILL.md.
   const missing: string[] = [];
-  const bundle = await fetchBundle(client.base, registrySlug, client.token, { missing });
+  let bundle: BundleFile[] | null = null;
+  try {
+    bundle = await fetchBundle(client.base, registrySlug, client.token, { missing });
+  } catch (e) {
+    // A failed integrity check must never silently downgrade to an
+    // unverified GitHub fetch — surface it so the install hard-blocks.
+    if (e instanceof IntegrityError) throw e;
+    // Any other bundle failure (an oversized bundle, say): the registry still
+    // knows the skill, so its source_repo is next, never owner/name on GitHub.
+  }
   if (bundle && bundle.length) {
     const sk = bundle.find((file) => file.path === "SKILL.md");
     const note = bundleNote(bundle, missing);
@@ -258,7 +333,7 @@ export async function registryCandidate(
   }
   // The registry's copy is unavailable: a pack falls back to a live GitHub fetch.
   if (skill.type === "pack") {
-    const pack = await resolvePackFiles(skill, hooks.fetchTree);
+    const pack = await resolvePackFiles(skill, opts.fetchTree);
     if (pack) return { ...meta, ...pack };
   }
   return { ...meta, raw: skillMdFor(skill) };
@@ -273,7 +348,12 @@ export interface SlugHooks {
   fetchSource?: (arg: string) => Promise<ResolvedSkill[]>;
 }
 
-/** Resolve a bare `owner/name`: the registry first, GitHub as the fallback. */
+/** Resolve a bare `owner/name`: the registry first, GitHub as the fallback.
+ *
+ *  Once the registry has answered with the skill's record, everything read from
+ *  GitHub goes to that record's source_repo. `owner/name` is read as a GitHub
+ *  repo only when there is no record to ask: a 404 (not a registry slug, so the
+ *  plain owner/repo meaning) or a registry that gave no answer at all. */
 export async function resolveRegistrySlug(
   spec: Extract<SourceSpec, { kind: "slug" }>,
   source: string,
@@ -288,20 +368,22 @@ export async function resolveRegistrySlug(
   let registryDown: RegistryError | null = null;
   const registryHost = (() => { try { return new URL(client.base).host; } catch { return "api.skillmd.com"; } })();
   const arg = spec.display;
+  let skill: RegistrySkill | null = null;
   try {
-    return [await registryCandidate(spec.owner, spec.name, source, client, { fetchTree: hooks.fetchTree })];
+    skill = await client.api<RegistrySkill>(`/api/skills/${spec.owner}/${spec.name}`);
   } catch (e) {
-    // A failed integrity check must never silently downgrade to an
-    // unverified GitHub fetch — surface it so the install hard-blocks.
-    if (e instanceof IntegrityError) throw e;
     if (e instanceof RegistryError && e.status !== 404) registryDown = e;
     // otherwise fall through to a git fetch
   }
+  // The registry knows the skill. What can still go wrong from here is the
+  // skill's own business (an integrity failure blocks the install, a --ref that
+  // can't be read says so) and never turns into a read of github.com/<owner>/<name>.
+  if (skill) return [await candidateFromRecord(skill, spec.owner, spec.name, source, client, { fetchTree: hooks.fetchTree, ref: spec.ref })];
   // The fallback is a GitHub fetch, so the provenance recorded is GitHub's —
   // never the registry slug the user typed.
-  const ghSource = sourceId({ kind: "github", owner: spec.owner, repo: spec.name, display: arg });
+  const ghSource = sourceId({ kind: "github", owner: spec.owner, repo: spec.name, ...(spec.ref ? { ref: spec.ref } : {}), display: arg });
   try {
-    const rs = await (hooks.fetchSource ?? resolveSource)(arg);
+    const rs = await (hooks.fetchSource ?? resolveSource)(argWithRef(arg, spec.ref));
     const note = registryDown ? registryFallbackNote(registryHost) : undefined;
     return rs.map((r) => ({ name: r.slug, raw: r.raw, slug: r.slug, source: ghSource, note }));
   } catch (e) {
@@ -941,7 +1023,7 @@ export function addCommand(): Command {
     .option("-p, --project", "install into the current directory's agent folders (committed with the project)")
     .option("-a, --agent <agents...>", "target specific agents (default: every agent detected on this machine)")
     .option("-s, --skill <names...>", "install only specific skills by name ('*' for all)")
-    .option("--ref <ref>", "git ref (branch, tag or commit) for GitHub sources")
+    .option("--ref <ref>", "branch, tag or commit to read the source at (for a registry skill: its source repository)")
     .option("-l, --list", "list the skills a source contains without installing")
     .addOption(new Option("--mode <mode>", "link (junction/symlink into each agent dir, default) or copy").choices(["link", "copy"]).default("link"))
     .option("--force", "replace a skill installed from a different source, or an untracked directory")

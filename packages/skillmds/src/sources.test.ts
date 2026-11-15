@@ -47,6 +47,22 @@ describe("parseSource", () => {
     const s = parseSource("o/r#dev", { exists: () => false, ref: "v3" });
     expect(s.kind === "github" && s.ref).toBe("v3");
   });
+  // A registry slug is not a GitHub repo, so --ref cannot turn owner/name into
+  // one: the registry says where the skill really lives (its source_repo).
+  it("--ref on a bare owner/name keeps it a registry slug and carries the ref", () => {
+    expect(parseSource("antfu/vite", { exists: () => false, ref: "v2" })).toEqual({ kind: "slug", owner: "antfu", name: "vite", ref: "v2", display: "antfu/vite" });
+    expect(parseSource("o/r.git", { exists: () => false, ref: "v2" })).toEqual({ kind: "slug", owner: "o", name: "r", ref: "v2", display: "o/r.git" });
+  });
+  it("--ref leaves every explicit GitHub form a GitHub source", () => {
+    for (const input of ["github:o/r", "gh:o/r", "o/r#dev", "o/r/sub", "o/r@skill", "https://github.com/o/r"]) {
+      const s = parseSource(input, { exists: () => false, ref: "v2" });
+      expect(s.kind, input).toBe("github");
+      expect(s.kind === "github" && s.ref, input).toBe("v2");
+    }
+  });
+  it("a slug is identified by the registry, ref or not", () => {
+    expect(sourceId({ kind: "slug", owner: "o", name: "n", ref: "v2", display: "o/n" })).toBe("registry:o/n");
+  });
   it("rejects subpaths that escape the repo", () => {
     expect(() => parseSource("o/r/../../etc", { exists: () => false })).toThrow(/\.\./);
     expect(() => parseSource("https://github.com/o/r/tree/main/a/../b", { exists: () => false })).toThrow(/\.\./);

@@ -505,6 +505,10 @@ describe("argWithRef", () => {
   });
   it("leaves an argument alone when no --ref was passed", () => {
     expect(argWithRef("o/r/sub@skill")).toBe("o/r/sub@skill");
+    expect(argWithRef("o/r")).toBe("o/r");
+  });
+  it("reads a bare owner/name as the GitHub repo it names (the fallback meaning)", () => {
+    expect(argWithRef("o/r", "v2")).toBe("github:o/r#v2");
   });
 });
 
@@ -1009,8 +1013,10 @@ describe("registryCandidate with a companion gone upstream", () => {
 // has to come from that record.
 const VITE_SOURCE = "https://github.com/antfu/skills/tree/main/skills/vite";
 const VITE_SHA = "c".repeat(40);
-const VITE_MD = "---\nname: vite\ndescription: The vite skill as the registry has it.\n---\n# vite\n";
-const VITE_SRC_MD = "---\nname: vite\ndescription: The vite skill as its source repo has it.\n---\n# vite\n";
+// Two different copies, so a test can tell which one was installed. Long enough to lint clean.
+const viteMd = (from: string) => `---\nname: vite\ndescription: The vite skill as ${from} has it, for build configuration.\n---\n\n# Vite\n\n${"body ".repeat(50)}`;
+const VITE_MD = viteMd("the registry");
+const VITE_SRC_MD = viteMd("its source repo");
 const b64 = (s: string) => Buffer.from(s).toString("base64");
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -1119,5 +1125,136 @@ describe("resolveRegistrySlug: the registry first, GitHub as the fallback", () =
     expect(c!.files).toBeUndefined();
     expect(calls.tree).toEqual([]);
     expect(calls.source).toEqual([]);
+  });
+});
+
+describe("a skill the registry knows never falls back to github.com/<owner>/<name>", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  // fetchBundle throws a plain Error (not an integrity failure) past 200 files.
+  const tooBig = bundleOf(Array.from({ length: 201 }, (_, i) => ({ path: `f${i}.md` })));
+
+  it("a pack whose bundle fails reads its source_repo at the pinned commit", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord(), tooBig);
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(calls.source).toEqual([]);
+    expect(calls.tree).toEqual([[VITE_SOURCE, VITE_SHA]]);
+    expect(c!.registrySlug).toBe("antfu/vite");
+    expect(c!.source).toBe("registry:antfu/vite");
+    expect(c!.files?.map((f) => f.path)).toEqual(["SKILL.md", "references/config.md"]);
+  });
+
+  it("is not reported as an unreachable registry: the registry answered", async () => {
+    const { client, hooks } = slugWorld(viteRecord(), tooBig);
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(c!.note).toBeUndefined();
+  });
+
+  it("when the bundle and the source_repo both fail, it installs the registry's own SKILL.md", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord(), tooBig, { fetchTree: async () => { throw new Error("offline"); } });
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(calls.source).toEqual([]);
+    expect(c!.raw).toBe(VITE_MD);
+    expect(c!.registrySlug).toBe("antfu/vite");
+  });
+
+  it("a single whose bundle fails installs the registry's own SKILL.md and reads nothing from GitHub", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord({ type: "single" }), tooBig);
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(c!.raw).toBe(VITE_MD);
+    expect(calls.tree).toEqual([]);
+    expect(calls.source).toEqual([]);
+  });
+});
+
+describe("--ref on a registry slug reads the skill's source_repo at that ref", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads antfu/skills/skills/vite at the ref, not github.com/antfu/vite, and skips the pinned bundle", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord());
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite", "v2.0.0"), "registry:antfu/vite", client, hooks);
+    expect(calls.tree).toEqual([[VITE_SOURCE, "v2.0.0"]]);
+    expect(calls.source).toEqual([]);
+    expect(calls.bundle).toBe(0);
+    expect(c!.raw).toBe(VITE_SRC_MD);
+    expect(c!.files?.map((f) => f.path)).toEqual(["SKILL.md", "references/config.md"]);
+    expect(c!.registrySlug).toBe("antfu/vite");
+    expect(c!.name).toBe("vite");
+  });
+
+  it("records where the files really came from, so `update` follows the same ref", async () => {
+    const { client, hooks } = slugWorld(viteRecord());
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite", "v2.0.0"), "registry:antfu/vite", client, hooks);
+    expect(c!.source).toBe("github:antfu/skills/skills/vite#v2.0.0");
+    expect(c!.commit_sha).toBeUndefined();
+    expect(c!.note).toContain(VITE_SOURCE);
+    expect(c!.note).toContain("v2.0.0");
+  });
+
+  it("for a single skill, installs just the SKILL.md at that ref", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord({ type: "single" }));
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite", "main"), "registry:antfu/vite", client, hooks);
+    expect(calls.tree).toEqual([[VITE_SOURCE, "main"]]);
+    expect(c!.raw).toBe(VITE_SRC_MD);
+    expect(c!.files).toBeUndefined();
+  });
+
+  it("fails, naming the source and the ref, when the ref can't be read: no other version is installed instead", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord(), BUNDLE_DOWN, { fetchTree: async () => { throw new Error("404 Not Found"); } });
+    const run = resolveRegistrySlug(slugSpec("antfu", "vite", "nope"), "registry:antfu/vite", client, hooks);
+    await expect(run).rejects.toThrow(VITE_SOURCE);
+    await expect(run).rejects.toThrow('"nope"');
+    expect(calls.source).toEqual([]);
+    expect(calls.bundle).toBe(0);
+  });
+
+  it("fails when the source has no SKILL.md at that ref", async () => {
+    const { client, hooks } = slugWorld(viteRecord(), BUNDLE_DOWN, { fetchTree: async () => [{ path: "README.md", contents: Buffer.from("x") }] });
+    await expect(resolveRegistrySlug(slugSpec("antfu", "vite", "v0"), "registry:antfu/vite", client, hooks)).rejects.toThrow(/no SKILL\.md/);
+  });
+
+  it("refuses when the registry has no source repository for the skill, instead of guessing github.com/<owner>/<name>", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord({ source_repo: null }));
+    await expect(resolveRegistrySlug(slugSpec("antfu", "vite", "v1"), "registry:antfu/vite", client, hooks)).rejects.toThrow(/no source repository/);
+    expect(calls.source).toEqual([]);
+    expect(calls.tree).toEqual([]);
+  });
+
+  it("only ever reads a GitHub source_repo: another host, or a path, is refused unread", async () => {
+    for (const source_repo of ["https://example.com/o/r", "/etc", "https://gitlab.com/o/r"]) {
+      const { client, hooks, calls } = slugWorld(viteRecord({ source_repo }));
+      await expect(resolveRegistrySlug(slugSpec("antfu", "vite", "v1"), "registry:antfu/vite", client, hooks)).rejects.toThrow(/GitHub/);
+      expect(calls.tree).toEqual([]);
+      expect(calls.source).toEqual([]);
+    }
+  });
+
+  it("on a registry 404, reads the plain GitHub owner/repo at that ref", async () => {
+    const { client, hooks, calls } = slugWorld(registry404());
+    const [c] = await resolveRegistrySlug(slugSpec("o", "r", "v1"), "registry:o/r", client, hooks);
+    expect(calls.source).toEqual(["github:o/r#v1"]);
+    expect(c!.source).toBe("github:o/r#v1");
+    expect(c!.note).toBeUndefined();
+  });
+
+  it("with the registry unreachable, the owner/name fallback carries the ref and the warning", async () => {
+    const { client, hooks, calls } = slugWorld(registry503());
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite", "v1"), "registry:antfu/vite", client, hooks);
+    expect(calls.source).toEqual(["github:antfu/vite#v1"]);
+    expect(c!.source).toBe("github:antfu/vite#v1");
+    expect(c!.note).toBe(registryFallbackNote("api.test"));
+  });
+
+  it("installs the ref's files and writes the lock entry with the GitHub provenance", async () => {
+    const home = tmp();
+    const { client, hooks } = slugWorld(viteRecord());
+    const deps: AddDeps = {
+      resolve: async (_arg, f) => resolveRegistrySlug(slugSpec("antfu", "vite", f.ref), "registry:antfu/vite", client, hooks),
+      fireInstall: () => {},
+    };
+    const r = await runAdd("antfu/vite", { ref: "v2.0.0", cwd: tmp(), home, global: true, yes: true, agent: ["claude-code"], env: {} }, deps);
+    expect(r.exitCode).toBe(0);
+    expect(readFileSync(join(home, ".agents", "skills", "vite", "references", "config.md"), "utf8")).toBe("# config");
+    expect(readLock({ global: true, home }).skills.vite?.source).toBe("github:antfu/skills/skills/vite#v2.0.0");
+    expect(stripAnsi(r.output)).toContain("(--ref)");
   });
 });
