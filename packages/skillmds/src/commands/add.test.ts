@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, existsSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAdd, runAddWithUI, addCommand, addFlags, agentsPromptMessage, argWithRef, looksLikeProject, resolvePackFiles, registryFallbackNote, registryUnreachableError, fetchPackMembers, packDirNames, fetchPackArchive } from "./add.js";
-import type { AddCandidate, AddDeps, AddFlags, AddUI } from "./add.js";
+import { runAdd, runAddWithUI, addCommand, addFlags, agentsPromptMessage, argWithRef, looksLikeProject, resolvePackFiles, resolveRegistrySlug, registryFallbackNote, registryUnreachableError, fetchPackMembers, packDirNames, fetchPackArchive } from "./add.js";
+import type { AddCandidate, AddDeps, AddFlags, AddUI, SlugHooks } from "./add.js";
 import { IntegrityError, RegistryError } from "../api.js";
+import type { Client, RegistrySkill } from "../api.js";
+import type { SourceSpec } from "../sources.js";
 import { readLock } from "../lock.js";
 import { GLYPH, stripAnsi } from "../ui.js";
 
@@ -998,5 +1000,124 @@ describe("registryCandidate with a companion gone upstream", () => {
     const c = await registryCandidate("o", "p", "registry:o/p", { api, base: "https://api.test", token: undefined });
     expect(c.files).toBeUndefined();
     expect(c.raw).toBe(md);
+  });
+});
+
+// A registry slug is not a GitHub repo. antfu/vite lives in a subfolder of
+// antfu/skills, recorded as the skill's source_repo: github.com/antfu/vite does
+// not exist. Whatever the CLI reads from GitHub for a skill the registry knows
+// has to come from that record.
+const VITE_SOURCE = "https://github.com/antfu/skills/tree/main/skills/vite";
+const VITE_SHA = "c".repeat(40);
+const VITE_MD = "---\nname: vite\ndescription: The vite skill as the registry has it.\n---\n# vite\n";
+const VITE_SRC_MD = "---\nname: vite\ndescription: The vite skill as its source repo has it.\n---\n# vite\n";
+const b64 = (s: string) => Buffer.from(s).toString("base64");
+const sha = (s: string) => createHash("sha256").update(s).digest("hex");
+
+const slugSpec = (owner: string, name: string, ref?: string): Extract<SourceSpec, { kind: "slug" }> =>
+  ({ kind: "slug", owner, name, display: `${owner}/${name}`, ...(ref ? { ref } : {}) });
+
+function viteRecord(over: Partial<RegistrySkill> = {}): RegistrySkill {
+  return { slug: "antfu/vite", title: "vite", description: "Vite skill.", raw_md: VITE_MD, type: "pack", verified: true, source_repo: VITE_SOURCE, commit_sha: VITE_SHA, ...over };
+}
+
+/** How the registry's bundle endpoint answers. */
+const bundleOf = (files: object[]) => () => new Response(JSON.stringify({ files }), { status: 200 });
+const BUNDLE_DOWN = () => new Response("down", { status: 503 });
+
+/** A fake registry and a fake GitHub, recording every read that reaches them. */
+function slugWorld(record: RegistrySkill | Error, bundle: () => Response = BUNDLE_DOWN, over: SlugHooks = {}) {
+  const calls = { bundle: 0, tree: [] as [string, string | undefined][], source: [] as string[] };
+  vi.stubGlobal("fetch", async () => { calls.bundle++; return bundle(); });
+  const client = {
+    api: (async () => { if (record instanceof Error) throw record; return record; }) as unknown as Client["api"],
+    base: "https://api.test",
+    token: undefined,
+  };
+  const hooks: SlugHooks = {
+    fetchTree: async (url, ref) => {
+      calls.tree.push([url, ref]);
+      return [
+        { path: "SKILL.md", contents: Buffer.from(VITE_SRC_MD) },
+        { path: "references/config.md", contents: Buffer.from("# config") },
+      ];
+    },
+    fetchSource: async (arg) => { calls.source.push(arg); return [{ path: arg, raw: VITE_SRC_MD, slug: "r" }]; },
+    ...over,
+  };
+  return { client, hooks, calls };
+}
+
+const registry404 = () => new RegistryError("SkillMD API 404 on /api/skills/o/r: not found", 404);
+const registry503 = () => new RegistryError("SkillMD API 503 on /api/skills/antfu/vite: unavailable", 503);
+
+describe("resolveRegistrySlug: the registry first, GitHub as the fallback", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a registry 404 keeps the plain GitHub owner/repo meaning, with no warning", async () => {
+    const { client, hooks, calls } = slugWorld(registry404());
+    const [c] = await resolveRegistrySlug(slugSpec("o", "r"), "registry:o/r", client, hooks);
+    expect(calls.source).toEqual(["o/r"]);
+    expect(c!.source).toBe("github:o/r");
+    expect(c!.note).toBeUndefined();
+    expect(c!.registrySlug).toBeUndefined();
+  });
+
+  it("a registry that can't be reached at all still falls back to owner/name, with the warning", async () => {
+    // No skill record means no source_repo to read, so owner/name is all there is.
+    const { client, hooks, calls } = slugWorld(registry503());
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(calls.source).toEqual(["antfu/vite"]);
+    expect(c!.note).toBe(registryFallbackNote("api.test"));
+  });
+
+  it("names the unreachable registry when that GitHub fallback fails too", async () => {
+    const { client, hooks } = slugWorld(registry503(), BUNDLE_DOWN, { fetchSource: async () => { throw new Error("404 Not Found"); } });
+    await expect(resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks))
+      .rejects.toThrow(/could not reach the SkillMD registry at api\.test \(HTTP 503\)/);
+  });
+
+  it("installs from the registry bundle when the bundle is there", async () => {
+    const bundle = bundleOf([
+      { path: "SKILL.md", content_base64: b64(VITE_MD), storage: "inline" },
+      { path: "assets/a.md", content_base64: b64("a"), sha256: sha("a"), storage: "r2" },
+    ]);
+    const { client, hooks, calls } = slugWorld(viteRecord(), bundle);
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(c!.files?.map((f) => f.path)).toEqual(["SKILL.md", "assets/a.md"]);
+    expect(c!.source).toBe("registry:antfu/vite");
+    expect(calls.tree).toEqual([]);
+    expect(calls.source).toEqual([]);
+  });
+
+  it("prefers the pinned commit_sha of the source_repo when a pack's bundle is unavailable", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord());
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(calls.tree).toEqual([[VITE_SOURCE, VITE_SHA]]);
+    expect(calls.source).toEqual([]);
+    expect(c!.pinMiss).toBe(false);
+    expect(c!.source).toBe("registry:antfu/vite");
+    expect(c!.commit_sha).toBe(VITE_SHA);
+    expect(c!.files?.map((f) => f.path)).toEqual(["SKILL.md", "references/config.md"]);
+  });
+
+  it("an integrity failure in the bundle blocks the install instead of falling back", async () => {
+    const bad = bundleOf([
+      { path: "SKILL.md", content_base64: b64(VITE_MD), storage: "inline" },
+      { path: "assets/a.md", content_base64: b64("a"), sha256: sha("something else"), storage: "r2" },
+    ]);
+    const { client, hooks, calls } = slugWorld(viteRecord(), bad);
+    await expect(resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks)).rejects.toBeInstanceOf(IntegrityError);
+    expect(calls.tree).toEqual([]);
+    expect(calls.source).toEqual([]);
+  });
+
+  it("a single whose bundle is unavailable installs the registry's own SKILL.md and reads nothing from GitHub", async () => {
+    const { client, hooks, calls } = slugWorld(viteRecord({ type: "single" }));
+    const [c] = await resolveRegistrySlug(slugSpec("antfu", "vite"), "registry:antfu/vite", client, hooks);
+    expect(c!.raw).toBe(VITE_MD);
+    expect(c!.files).toBeUndefined();
+    expect(calls.tree).toEqual([]);
+    expect(calls.source).toEqual([]);
   });
 });

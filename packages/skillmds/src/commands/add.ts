@@ -7,12 +7,14 @@ import { lint, parseSkillMd } from "@skillmds/core";
 import { createClient, skillMdFor, fetchBundle, IntegrityError, RegistryError, missingFilesNote } from "../api.js";
 import type { Client, RegistrySkill } from "../api.js";
 import { collectFiles, resolvePackFiles, resolveSource } from "../source.js";
+import type { ResolvedSkill, TreeFile } from "../source.js";
 import { looksLikeProject } from "../project.js";
 import { agentDir, agentSupportsGlobal, detectAgents } from "../agents.js";
 import { installSkill } from "../installer.js";
 import { readLock } from "../lock.js";
 import type { InstallResult, InstallTarget, SkillFileInput } from "../installer.js";
 import { parseSource, sourceId } from "../sources.js";
+import type { SourceSpec } from "../sources.js";
 import { claudeCliAvailable, installClaudePlugin, installPluginNatively, MARKETPLACE_NAME } from "../claudePlugin.js";
 import { detectHostAgent, isInteractive, nonInteractiveHint, realTerminal } from "../env.js";
 import type { Terminal } from "../env.js";
@@ -228,6 +230,7 @@ export async function registryCandidate(
   name: string,
   source: string,
   client: Pick<Client, "api" | "base" | "token">,
+  hooks: Pick<SlugHooks, "fetchTree"> = {},
 ): Promise<AddCandidate> {
   const registrySlug = `${owner}/${name}`;
   const skill = await client.api<RegistrySkill>(`/api/skills/${owner}/${name}`);
@@ -255,10 +258,56 @@ export async function registryCandidate(
   }
   // The registry's copy is unavailable: a pack falls back to a live GitHub fetch.
   if (skill.type === "pack") {
-    const pack = await resolvePackFiles(skill);
+    const pack = await resolvePackFiles(skill, hooks.fetchTree);
     if (pack) return { ...meta, ...pack };
   }
   return { ...meta, raw: skillMdFor(skill) };
+}
+
+/** The outside world a bare `owner/name` is resolved against. Injected so the
+ *  fallbacks can be tested without a network; the defaults are the real reads. */
+export interface SlugHooks {
+  /** A GitHub directory's file tree, at `ref` when given (resolveTree). */
+  fetchTree?: (url: string, ref?: string) => Promise<TreeFile[]>;
+  /** A plain GitHub source, read the way `add owner/repo` reads one (resolveSource). */
+  fetchSource?: (arg: string) => Promise<ResolvedSkill[]>;
+}
+
+/** Resolve a bare `owner/name`: the registry first, GitHub as the fallback. */
+export async function resolveRegistrySlug(
+  spec: Extract<SourceSpec, { kind: "slug" }>,
+  source: string,
+  client: Pick<Client, "api" | "base" | "token">,
+  hooks: SlugHooks = {},
+): Promise<AddCandidate[]> {
+  // Registry failure other than a 404. A 404 means "not a registry slug" and
+  // the GitHub fallback is the intended path; anything else (DNS failure,
+  // egress proxy 403, 5xx) means the registry couldn't be reached — remember
+  // it so the fallback's own failure doesn't mask the real cause behind a
+  // confusing GitHub 404.
+  let registryDown: RegistryError | null = null;
+  const registryHost = (() => { try { return new URL(client.base).host; } catch { return "api.skillmd.com"; } })();
+  const arg = spec.display;
+  try {
+    return [await registryCandidate(spec.owner, spec.name, source, client, { fetchTree: hooks.fetchTree })];
+  } catch (e) {
+    // A failed integrity check must never silently downgrade to an
+    // unverified GitHub fetch — surface it so the install hard-blocks.
+    if (e instanceof IntegrityError) throw e;
+    if (e instanceof RegistryError && e.status !== 404) registryDown = e;
+    // otherwise fall through to a git fetch
+  }
+  // The fallback is a GitHub fetch, so the provenance recorded is GitHub's —
+  // never the registry slug the user typed.
+  const ghSource = sourceId({ kind: "github", owner: spec.owner, repo: spec.name, display: arg });
+  try {
+    const rs = await (hooks.fetchSource ?? resolveSource)(arg);
+    const note = registryDown ? registryFallbackNote(registryHost) : undefined;
+    return rs.map((r) => ({ name: r.slug, raw: r.raw, slug: r.slug, source: ghSource, note }));
+  } catch (e) {
+    if (registryDown) throw registryUnreachableError(arg, registryHost, registryDown);
+    throw e;
+  }
 }
 
 /** A registry plugin's members, in the order the plugin defines them.
@@ -422,35 +471,8 @@ function makeDefaultDeps(flags: AddFlags): AddDeps {
           ...(spec.kind === "local" && r.file ? { files: collectFiles(dirname(r.file), dirname(r.file)) } : {}),
         }));
       }
-      // Registry failure other than a 404. A 404 means "not a registry slug" and
-      // the GitHub fallback is the intended path; anything else (DNS failure,
-      // egress proxy 403, 5xx) means the registry couldn't be reached — remember
-      // it so the fallback's own failure doesn't mask the real cause behind a
-      // confusing GitHub 404.
-      let registryDown: RegistryError | null = null;
       const { api, base: apiBase, token } = createClient(f);
-      const registryHost = (() => { try { return new URL(apiBase).host; } catch { return "api.skillmd.com"; } })();
-      const registrySlug = `${spec.owner}/${spec.name}`;
-      try {
-        return [await registryCandidate(spec.owner, spec.name, source, { api, base: apiBase, token })];
-      } catch (e) {
-        // A failed integrity check must never silently downgrade to an
-        // unverified GitHub fetch — surface it so the install hard-blocks.
-        if (e instanceof IntegrityError) throw e;
-        if (e instanceof RegistryError && e.status !== 404) registryDown = e;
-        // otherwise fall through to a git fetch
-      }
-      // The fallback is a GitHub fetch, so the provenance recorded is GitHub's —
-      // never the registry slug the user typed.
-      const ghSource = sourceId({ kind: "github", owner: spec.owner, repo: spec.name, display: arg });
-      try {
-        const rs = await resolveSource(arg);
-        const note = registryDown ? registryFallbackNote(registryHost) : undefined;
-        return rs.map((r) => ({ name: r.slug, raw: r.raw, slug: r.slug, source: ghSource, note }));
-      } catch (e) {
-        if (registryDown) throw registryUnreachableError(arg, registryHost, registryDown);
-        throw e;
-      }
+      return resolveRegistrySlug(spec, source, { api, base: apiBase, token });
     },
     get promptScope() { return canPrompt() ? promptScopeInteractive : undefined; },
     get promptAgents() { return canPrompt() ? promptAgentsInteractive : undefined; },
