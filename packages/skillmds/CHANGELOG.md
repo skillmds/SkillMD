@@ -2,6 +2,11 @@
 
 All notable changes to `get-skill` (published as `skillmds` until 1.3.6) are documented here. Versions follow [semver](https://semver.org).
 
+## 1.3.13
+
+- **`skillmd login` now logs in from the browser.** It prints a short code and a skillmd.com address (and opens it), you approve the code there, and the token is stored for the API base that issued it, exactly as before. Ctrl-C cancels. `--token` and `SKILLMD_TOKEN` still work and are what to use in CI and agent shells, where `login` exits 1 and says so.
+- **`skillmd logout` also revokes the token on the server** (best effort, 3 seconds, only at the host the token was issued for, never over plain http), then removes it locally as before. A server that can't be reached never fails the logout.
+
 ## 1.3.12
 
 - **`--ref` and the registry fallbacks now read the skill's real source repository.** A registry slug is not a GitHub repo: `antfu/vite` lives in the `antfu/skills` repo. `add owner/name --ref <ref>` used to ask GitHub for a repo named `owner/name` and fail with a 404. It now reads the skill's source repository at that ref (a pack's whole folder, a single's SKILL.md) and records that GitHub source in the lock file, so `update` follows the same ref. A ref that can't be read, or a skill with no GitHub source repository, is an error; no other version is installed in its place.
