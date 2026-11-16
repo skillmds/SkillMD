@@ -174,7 +174,7 @@ Lints every skill in the repo and uploads SARIF to GitHub Code Scanning, so find
 ## Publishing a skill
 
 ```bash
-skillmd login                   # token from your skillmd.com account
+skillmd login                   # log in from your browser (CI: set SKILLMD_TOKEN)
 skillmd publish ./my-skill      # blocked on lint errors
 skillmd publish ./my-skill --dry-run
 ```

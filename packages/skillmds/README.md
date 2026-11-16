@@ -45,7 +45,7 @@ npx get-skill lint .
 | `skillmd update [names...]` | Update installed skills from the source recorded in the lock file. |
 | `skillmd check [names...]` | Report which installed skills have updates (`update --check`). |
 | `skillmd publish [path]` (`submit`) | Publish to the registry. Exits non-zero on lint errors. |
-| `skillmd login` / `logout` | Store or remove a token. |
+| `skillmd login` / `logout` | Log in from your browser (approve a short code on skillmd.com) and store the token; `logout` revokes it on the server and removes it. |
 
 > `check` is a command of its own since 1.2.0. It used to be an alias of `lint` — scripts that ran `skillmd check .` to validate a skill should now run `skillmd lint .`.
 
@@ -126,7 +126,7 @@ skillmd check --json
 - **Scope auto-detection.** With `-y`, `--json`, piped stdin, or inside a host agent (Claude Code, Cursor, Codex, Gemini CLI, or any CI), `add` picks **project** when the working directory carries `.git`, `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `AGENTS.md`, `CLAUDE.md`, `skills-lock.json` or an agent dot-dir, and **global** otherwise. It says which it picked. Pass `-p` or `-g` to decide yourself.
 - **Piped with neither `-y` nor a scope flag exits 1** with a hint rather than guessing where to write.
 - **Exit codes.** `0` success; `1` anything that failed — lint errors, a blocked or denied skill, nothing removed, an update that couldn't be applied, or a prompt that was required but impossible. `login`, `logout` and `init` also exit 1 off a TTY, naming the flags to pass instead.
-- **Tokens.** Prefer `skillmd login` or `SKILLMD_TOKEN` over `--token`: a token on the command line is visible in your shell history and in every process listing on the machine, and the CLI warns about it. A stored token is bound to the API base it was saved for and is never sent anywhere else. An `http://` API base is refused unless you add `--insecure-http`.
+- **Tokens.** `skillmd login` logs in from your browser; off a terminal (CI, an agent shell) use `skillmd login --token <token>` once, or set `SKILLMD_TOKEN`. Prefer `skillmd login` or `SKILLMD_TOKEN` over `--token`: a token on the command line is visible in your shell history and in every process listing on the machine, and the CLI warns about it. A stored token is bound to the API base it was saved for and is never sent anywhere else. An `http://` API base is refused unless you add `--insecure-http`.
 
 ### What the CLI sends
 
@@ -146,7 +146,7 @@ export SKILLMD_NO_TELEMETRY=1   # or the cross-tool DO_NOT_TRACK=1
 ### publish
 
 ```bash
-skillmd login                # store a token from your skillmd.com account
+skillmd login                # log in from your browser (CI: set SKILLMD_TOKEN)
 skillmd publish ./my-skill   # blocked on lint errors
 skillmd publish ./my-skill --dry-run
 skillmd publish ./my-skill --force   # publish despite warnings; never bypasses errors

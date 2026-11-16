@@ -98,7 +98,9 @@ Publish a skill (or pack, `--type pack`) to the registry. Refuses on lint errors
 
 ### `skillmd login` / `skillmd logout`
 
-Store or remove a personal access token from your skillmd.com account.
+`skillmd login` logs in from your browser: it prints a short code and a skillmd.com address (and opens it), you approve the code there, and the token is stored for the API base it was issued by. Ctrl-C cancels. Off a terminal (CI, an agent shell) it exits 1 and names the fallbacks: `skillmd login --token <token>` stores a token you already have, and `SKILLMD_TOKEN` supplies one without storing anything.
+
+`skillmd logout` asks the registry to revoke the stored token (best effort, 3 seconds, only at the host the token was issued for), then removes it from `~/.skillmd/config.json` either way.
 
 ## Supported agents
 
