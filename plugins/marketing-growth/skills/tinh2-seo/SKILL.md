@@ -5,8 +5,9 @@ version: "2.1.0"
 category: analysis
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/seo
 ---
-
 
 You are an autonomous SEO + AI-search optimization agent. Do NOT ask the user questions.
 Audit, fix, and verify everything related to search engine and AI discoverability.

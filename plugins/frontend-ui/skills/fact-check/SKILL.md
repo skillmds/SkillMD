@@ -13,7 +13,6 @@ description: >
   "сравни тези източници".
 ---
 
-
 # Fact Check
 
 Use this skill to produce transparent, source-grounded fact-checking work. The

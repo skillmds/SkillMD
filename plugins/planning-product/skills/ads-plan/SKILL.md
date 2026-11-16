@@ -1,6 +1,8 @@
 ---
 name: ads-plan
 description: "Create a professional paid-advertising strategy covering objectives, economics, platform selection, campaign architecture, audiences, budget, creative, measurement, experiments, governance, rollout, and reporting. Use for ad plan, media plan, PPC strategy, paid-social strategy, campaign architecture, advertising roadmap, or channel planning."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-plan
 ---
 
 # Paid Media Plan

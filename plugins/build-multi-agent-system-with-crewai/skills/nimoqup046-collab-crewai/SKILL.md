@@ -4,8 +4,9 @@ description: "You are an expert in designing collaborative AI agent teams with C
 risk: unknown
 source: "vibeship-spawner-skills (Apache 2.0)"
 date_added: "2026-02-27"
+metadata:
+  source: https://skillmd.com/skills/nimoqup046-collab/crewai
 ---
-
 
 # CrewAI
 

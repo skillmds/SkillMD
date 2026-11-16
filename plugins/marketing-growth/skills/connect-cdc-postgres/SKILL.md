@@ -9,8 +9,9 @@ description: >-
   Also covers Redpanda Enterprise destination features such as Iceberg Topics,
   Tiered Storage, and server-side Schema ID Validation, since postgres_cdc itself
   requires a Redpanda Enterprise license.
+metadata:
+  source: https://skillmd.com/skills/redpanda-data/connect-cdc-postgres
 ---
-
 
 # Redpanda Connect CDC: PostgreSQL
 

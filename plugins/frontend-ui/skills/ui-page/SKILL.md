@@ -12,7 +12,6 @@ tags: [ui, page-design, mobile, layout, styleseed]
 tools: [claude, cursor, codex, gemini]
 ---
 
-
 # UI Page
 
 ## Overview

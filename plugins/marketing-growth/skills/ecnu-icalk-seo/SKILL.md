@@ -1,6 +1,6 @@
 ---
 id: "87f72e94-113d-41cb-b4d8-a0ec44bb281d"
-name: "SEO英文产品标题优化"
+name: seo
 description: "根据用户指定的规则，将产品标题重写为利于SEO的英文标题。适用于需要删除品牌型号、规范格式、保留关键参数且输出纯文本的场景。"
 version: "0.1.0"
 tags:
@@ -15,6 +15,8 @@ triggers:
   - "重写标题利于SEO"
   - "产品标题SEO优化"
   - "英文标题生成"
+metadata:
+  source: https://skillmd.com/skills/ecnu-icalk/seo
 ---
 
 # SEO英文产品标题优化

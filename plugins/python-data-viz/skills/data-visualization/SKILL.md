@@ -6,11 +6,11 @@ description: >
   Trigger: Cuando necesitás crear gráficos, visualizar datos, o generar charts para análisis o presentaciones.
 license: MIT
 metadata:
+  source: https://skillmd.com/skills/leandrobenjaminl/data-visualization
   author: Leandro Benjamin L.
   version: "2.0"
   model_tier: T2-fast
 ---
-
 
 # Skill: data-visualization
 

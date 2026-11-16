@@ -1,6 +1,6 @@
 ---
 skill_id: project-management
-name: Project Management
+name: project-management
 version: 1.0.0
 category: project-management
 office: COO
@@ -30,8 +30,9 @@ collaborates_with:
   - release-manager
   - tester
   - security-analyst
+metadata:
+  source: https://skillmd.com/skills/drnabeelkhan/project-management
 ---
-
 
 # Project Management -- Domain Dispatcher
 

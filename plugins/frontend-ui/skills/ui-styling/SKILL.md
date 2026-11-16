@@ -8,7 +8,6 @@ metadata:
   version: "1.0.0"
 ---
 
-
 # UI Styling Skill
 
 Comprehensive skill for creating beautiful, accessible user interfaces combining shadcn/ui components, Tailwind CSS utility styling, and canvas-based visual design systems.

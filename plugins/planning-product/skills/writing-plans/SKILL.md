@@ -2,8 +2,9 @@
 id: "d27cc84f-96d0-507f-a940-900e8bbfb12d"
 name: writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code
+metadata:
+  source: https://skillmd.com/skills/ecnu-icalk/writing-plans
 ---
-
 
 # Writing Plans
 

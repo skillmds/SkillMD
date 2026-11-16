@@ -7,7 +7,6 @@ metadata:
   version: "1.0.0"
 ---
 
-
 # Brand
 
 Brand identity, voice, messaging, asset management, and consistency frameworks.

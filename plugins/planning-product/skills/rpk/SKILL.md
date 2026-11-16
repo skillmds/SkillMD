@@ -11,8 +11,9 @@ description: >-
   command-group discovery; for
   topic/cluster/security/cloud/registry/transform/debug work, see the matching
   /redpanda:rpk-* skill.
+metadata:
+  source: https://skillmd.com/skills/redpanda-data/rpk
 ---
-
 
 # rpk: Install, Profiles & Configuration
 

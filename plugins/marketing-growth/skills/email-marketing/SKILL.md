@@ -9,6 +9,8 @@ scenario: marketing
 aspect_hint: "600 邮件宽"
 featured: 7
 tags: ["email", "newsletter", "mjml"]
+metadata:
+  source: https://skillmd.com/skills/nexu-io/email-marketing
 ---
 
 【模板: 品牌产品发布邮件】

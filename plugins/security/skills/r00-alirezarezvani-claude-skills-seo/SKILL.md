@@ -1,5 +1,5 @@
 ---
-name: "r00-alirezarezvani-claude-skills--seo"
+name: r00-alirezarezvani-claude-skills-seo
 description: >
   📈 SEO & Content Marketing skill suite derived from alirezarezvani/claude-skills.
   Keyword research, content audits, SERP analysis, technical SEO and content strategy.

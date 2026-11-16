@@ -1,6 +1,8 @@
 ---
 name: retro
 description: Facilitates structured sprint retrospectives, analyzing team feedback and sprint data to generate prioritized, actionable improvement items.
+metadata:
+  source: https://skillmd.com/skills/comeonoliver/retro
 ---
 ## Sprint Retrospective Facilitator
 

@@ -3,7 +3,6 @@ name: openclaw-docs
 description: Find authoritative guidance for installing, configuring, operating, securing, and troubleshooting OpenClaw, including channels, model providers, Gateway operations, tools, plugins, automation, nodes, multi-agent routing, and CLI errors. Use for any question or maintenance task involving an OpenClaw installation, `openclaw` CLI command, Gateway daemon, configuration key, or integration.
 ---
 
-
 # OpenClaw documentation
 
 Use the synchronized official documentation as the source of truth. Keep context small by

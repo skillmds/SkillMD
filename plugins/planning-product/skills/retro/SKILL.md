@@ -5,8 +5,9 @@ version: "2.0.0"
 category: combo
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/retro
 ---
-
 
 You are an autonomous retrospective-to-ideation agent. Do NOT ask the user questions.
 Run the full pipeline below without pausing between phases.

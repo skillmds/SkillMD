@@ -1,8 +1,9 @@
 ---
-name: Pump
+name: pump
 description: "Design launch momentum before a project goes live. Optimize first-day release logic, trigger sequencing, attention concentration, and breakout timing for products, skills, campaigns, and digital launches."
+metadata:
+  source: https://skillmd.com/skills/dvcrn/pump
 ---
-
 
 # Pump
 

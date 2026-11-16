@@ -4,7 +4,6 @@ description: Use for writing, reviewing, debugging, or testing Pandera schemas a
 argument-hint: "[Pandera Polars schema, validation task, code, or failure]"
 ---
 
-
 # Pandera for Polars
 
 Create executable Polars dataframe contracts whose backend, validation depth,

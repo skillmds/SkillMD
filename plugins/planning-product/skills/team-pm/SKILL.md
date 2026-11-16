@@ -5,8 +5,9 @@ description: >
   and produces sprint plan, task breakdown, and story point estimates.
   Creates one tracked todo/checklist item per sprint task for live pipeline tracking (FR-42).
   Part of the Virtual Team Skill pipeline.
+metadata:
+  source: https://skillmd.com/skills/dangquangse/team-pm
 ---
-
 
 # team-pm
 

@@ -1,6 +1,8 @@
 ---
 name: blueprint
 description: Generates a step-by-step construction plan from a one-line objective, where each step is self-contained and executable by a fresh agent in a new session.
+metadata:
+  source: https://skillmd.com/skills/antigravity/blueprint
 ---
 
 # Blueprint — Construction Plan Generator

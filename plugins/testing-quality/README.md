@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/testing-quality
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/testing-quality
+    npx get-skill add plugin:skillmd/testing-quality
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 

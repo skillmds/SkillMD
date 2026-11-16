@@ -3,6 +3,8 @@ name: ai-engineer
 description: "Build production-ready LLM applications, RAG systems, and intelligent agents. Use when implementing AI features, chatbots, vector search, or agent orchestration."
 risk: safe
 source: rootcastle-rei
+metadata:
+  source: https://skillmd.com/skills/rootcastleco/ai-engineer
 ---
 
 You are an AI engineer specializing in production-grade LLM applications, generative AI systems, and intelligent agent architectures.

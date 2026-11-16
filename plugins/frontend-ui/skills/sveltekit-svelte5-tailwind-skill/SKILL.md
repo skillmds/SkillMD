@@ -6,7 +6,6 @@ scope: integration
 distribution: author-only
 ---
 
-
 # SvelteKit 2 + Svelte 5 + Tailwind v4 Integration Skill
 
 This skill provides comprehensive guidance for building modern web applications with the SvelteKit 2 + Svelte 5 + Tailwind CSS v4 stack.

@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/social-media-scraping
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/social-media-scraping
+    npx get-skill add plugin:skillmd/social-media-scraping
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 

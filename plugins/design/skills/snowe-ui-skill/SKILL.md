@@ -1,5 +1,5 @@
 ---
-name: "Snowe UI Skill"
+name: snowe-ui-skill
 slug: "snowe-ui-skill"
 description: "Architecture-first UI/UX design skill for Codex that helps agents reason from product truth, user journeys, causal design decisions, art direction, interaction, responsive behavior, imagery, iconography, and motion before implementation, then validate the result through rendered browser critique."
 verification: "listed"
@@ -9,7 +9,6 @@ framework: "Codex"
 tool_ecosystem:
   github_repo: "what0ff/snowe-ui-skill"
 ---
-
 
 # Snowe UI Skill
 

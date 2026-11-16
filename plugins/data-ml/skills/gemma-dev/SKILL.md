@@ -3,7 +3,6 @@ name: gemma-dev
 description: Trigger this skill when building applications with Gemma or for general knowledge inquiries related to Gemma models (e.g. prompt structure, capabilities). Covers model selection, development workflows, and deployment best practices.
 ---
 
-
 # Gemma Development Skill
 
 ## 1. Core Principle: Prioritize App Tooling

@@ -6,7 +6,6 @@ description: |
   (4) 用户发文章并希望转成可分享的图片, (5) 用户要求制作信息图/infographic
 ---
 
-
 # Article Poster Generator
 
 ## 概述

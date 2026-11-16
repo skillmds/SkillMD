@@ -1,8 +1,9 @@
 ---
 name: asc-cli-usage
 description: Guidance for using asc cli in this repo (flags, output formats, pagination, auth, and discovery). Use when asked to run or design asc commands or interact with App Store Connect via the CLI.
+metadata:
+  source: https://skillmd.com/skills/omega-bred/asc-cli-usage
 ---
-
 
 # asc cli usage
 

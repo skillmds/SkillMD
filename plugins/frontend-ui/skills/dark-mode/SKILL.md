@@ -7,7 +7,6 @@ platforms:
   - CLAUDE_CODE
 ---
 
-
 You are in AUTONOMOUS MODE. Do NOT ask questions. Execute the full pipeline below
 without pausing for user input. Make reasonable decisions using sensible defaults.
 

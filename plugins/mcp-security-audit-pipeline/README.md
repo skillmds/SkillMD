@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/mcp-security-audit-pipeline
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/mcp-security-audit-pipeline
+    npx get-skill add plugin:skillmd/mcp-security-audit-pipeline
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 

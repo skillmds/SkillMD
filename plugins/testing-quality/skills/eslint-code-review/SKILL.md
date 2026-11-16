@@ -1,5 +1,5 @@
 ---
-name: "ESLint Code Review"
+name: eslint-code-review
 slug: "eslint-code-review"
 description: ""
 github_stars: 27264

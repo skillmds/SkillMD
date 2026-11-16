@@ -1,5 +1,5 @@
 ---
-name: "r00-alirezarezvani-claude-skills--seo"
+name: r00-alirezarezvani-claude-skills-seo
 description: >
   📈 SEO & Content Marketing skill suite derived from alirezarezvani/claude-skills.
   Keyword research, content audits, SERP analysis, technical SEO and content strategy.
@@ -9,8 +9,9 @@ domain: seo
 tags: ["seo", "content", "marketing", "serp", "keywords"]
 source: "https://github.com/alirezarezvani/claude-skills"
 license: MIT
+metadata:
+  source: https://skillmd.com/skills/agenttestingclamp/r00-alirezarezvani-claude-skills-seo
 ---
-
 
 # 📈 SEO & Content Marketing Skill Suite
 

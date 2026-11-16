@@ -1,6 +1,6 @@
 # Skill Authoring Toolkit
 
-17 Agent Skills from SkillMD.
+16 Agent Skills from SkillMD.
 https://skillmd.com/plugins/skillmd/skill-authoring-toolkit
 
 ## Claude Code
@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/skill-authoring-toolkit
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/skill-authoring-toolkit
+    npx get-skill add plugin:skillmd/skill-authoring-toolkit
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 
@@ -45,7 +45,6 @@ https://skillmd.com/agents
 - dbs-agent-migration
 - hermes-dojo
 - syke
-- your-skill-name
 - claw-orchestrator
 - agent-skill-creator
 - full

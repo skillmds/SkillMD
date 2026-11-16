@@ -4,7 +4,6 @@ description: Use for writing, reviewing, debugging, testing, or optimizing Pytho
 argument-hint: "[PyArrow task, code, schema, error, or data boundary]"
 ---
 
-
 # PyArrow Python
 
 Produce schema-explicit columnar code whose logical object, batch boundary,

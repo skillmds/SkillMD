@@ -1,5 +1,5 @@
 ---
-name: "HTML Docs"
+name: html-docs
 slug: "html-docs"
 description: "Turns folders, codebases, websites, PDFs, documents, and research topics into source-grounded HTML documents, deterministic narrated videos, or complete learning courses; also publishes and revises collaborative HTML pages through the HTML Docs CLI, REST API, and MCP server."
 verification: "listed"

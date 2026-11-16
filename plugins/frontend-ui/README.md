@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/frontend-ui
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/frontend-ui
+    npx get-skill add plugin:skillmd/frontend-ui
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 

@@ -5,7 +5,6 @@ description: Guide for creating high-quality MCP (Model Context Protocol) server
 license: Complete terms in LICENSE.txt
 ---
 
-
 # MCP Server Development Guide
 
 ## Overview

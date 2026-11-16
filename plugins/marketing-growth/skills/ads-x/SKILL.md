@@ -1,6 +1,8 @@
 ---
 name: ads-x
 description: "Audit X Ads measurement, X Pixel and Conversions API, campaign objectives, keyword and conversation targeting, creative, budgets, brand safety, app measurement, and reporting. Use for X Ads, Twitter Ads, promoted posts, X Pixel, X Conversions API, conversation targeting, or paid campaigns on X."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-x
 ---
 
 # X Ads Audit

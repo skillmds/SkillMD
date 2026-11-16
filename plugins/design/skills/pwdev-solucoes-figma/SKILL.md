@@ -7,7 +7,6 @@ description: >
   Requires /figma:figma-use skill before every use_figma call.
 ---
 
-
 # Skill: Figma ↔ Vue 3 + shadcn-vue
 
 ## Reading flow via MCP (Figma → Code)

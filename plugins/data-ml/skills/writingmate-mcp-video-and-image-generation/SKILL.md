@@ -1,5 +1,5 @@
 ---
-name: "Writingmate MCP Video and Image Generation"
+name: writingmate-mcp-video-and-image-generation
 slug: "writingmate-mcp"
 description: "Connects Claude Code, Codex, Cursor, and other MCP hosts to Writingmate for model discovery, text comparison, image generation, and video generation with Seedance, Sora, Veo, Kling, PixVerse, and other available models."
 github_stars: 0
@@ -12,7 +12,6 @@ tool_ecosystem:
   github_repo: "writingmate/skills"
   github_stars: 0
 ---
-
 
 # Writingmate MCP Video and Image Generation
 

@@ -1,6 +1,6 @@
 ---
 skill_id: post-analyzer
-name: Post Analyzer — why a post worked or flopped + what to change
+name: post-analyzer-why-a-post-worked-or-flopped-what-to-change
 version: 1.0.0
 category: content
 office: cmo
@@ -19,6 +19,8 @@ references:
   adr_moat_framing: documents/ADRs/ADR-007-behavioral-moat-framing-doctrine.md
   adr_confidence: documents/ADRs/ADR-010-confidence-tag-technical-educator-rubric.md
 confidence_default: 🟢 HIGH
+metadata:
+  source: https://skillmd.com/skills/drnabeelkhan/post-analyzer-why-a-post-worked-or-flopped-what-to-change
 ---
 
 # Post Analyzer

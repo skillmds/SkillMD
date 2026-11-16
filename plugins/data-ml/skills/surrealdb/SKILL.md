@@ -90,7 +90,6 @@ security:
   no_curl_pipe_sh: true
 ---
 
-
 # SurrealDB 3 Skill
 
 Expert-level SurrealDB 3 architecture, development, and operations. Covers SurrealQL, multi-model data modeling, graph traversal, vector search, security, deployment, performance tuning, SDK integration, and the wider SurrealDB ecosystem, including SurrealKit, SurrealMCP, n8n, CodeMirror, and agent-skill surfaces.

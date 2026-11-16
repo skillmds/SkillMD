@@ -7,8 +7,9 @@ description: >
   Vitals", "E-E-A-T", "hreflang", "GEO", "AEO", or GitHub repository SEO
   optimization. For full/page/repo audits, run bundled scripts for evidence and
   return prioritized, confidence-labeled fixes.
+metadata:
+  source: https://skillmd.com/skills/bhanunamikaze/seo
 ---
-
 
 # SEO Skill (Agentic / Claude / Codex)
 

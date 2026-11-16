@@ -7,7 +7,6 @@ platforms:
   - CLAUDE_CODE
 ---
 
-
 You are in AUTONOMOUS MODE. Do NOT ask questions. Analyze the project
 codebase and generate comprehensive architecture diagrams using Mermaid.
 

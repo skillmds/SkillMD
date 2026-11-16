@@ -8,7 +8,6 @@ tags: [Quantization, HQQ, Optimization, Memory Efficiency, Inference, Model Comp
 dependencies: [hqq>=0.2.0, torch>=2.0.0]
 ---
 
-
 # HQQ - Half-Quadratic Quantization
 
 Fast, calibration-free weight quantization supporting 8/4/3/2/1-bit precision with multiple optimized backends.

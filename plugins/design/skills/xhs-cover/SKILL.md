@@ -20,7 +20,6 @@ metadata:
     emoji: "🎨"
 ---
 
-
 # 小红书封面生成器
 
 直接生成或修改小红书封面，优先使用 GPT Image 2 / Codex 图片生成能力。

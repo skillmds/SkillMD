@@ -3,11 +3,11 @@ name: matplotlib
 description: "Matplotlib is Python's foundational visualization library for creating static, animated, and interactive plots."
 license: https://github.com/matplotlib/matplotlib/tree/main/LICENSE
 metadata:
+    source: https://skillmd.com/skills/antigravity/matplotlib
     skill-author: K-Dense Inc.
 risk: unknown
 source: community
 ---
-
 
 # Matplotlib
 

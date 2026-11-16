@@ -1,6 +1,6 @@
 ---
 version: alpha
-name: Clay-design-analysis
+name: clay-design-analysis
 description: A vibrant claymation-meets-data interface for Clay.com (GTM data-orchestration platform). Anchors on white canvas with dark-navy primary CTAs, custom rounded display type, and saturated single-color feature cards — hot pink, deep teal, lavender, peach, ochre — that punctuate long-scroll explainer pages. Brand voltage comes from 3D-rendered claymation illustrations (mountains, characters, mascots) used as full-bleed hero artifacts and the bright multi-color card surfaces showing product UI fragments.
 
 colors:
@@ -290,8 +290,9 @@ components:
     textColor: "{colors.body}"
     typography: "{typography.body-sm}"
     padding: 80px
+metadata:
+  source: https://skillmd.com/skills/voltagent/clay-design-analysis
 ---
-
 
 ## Overview
 

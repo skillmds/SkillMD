@@ -1,6 +1,6 @@
 ---
 skill_id: marketing
-name: Marketing & Growth
+name: marketing-growth
 version: 1.0.0
 category: marketing
 office: CMO
@@ -26,8 +26,9 @@ collaborates_with:
   - behavioral-designer
   - compliance
   - content-strategist
+metadata:
+  source: https://skillmd.com/skills/drnabeelkhan/marketing-growth
 ---
-
 
 # Marketing & Growth -- Domain Dispatcher
 

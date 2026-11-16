@@ -1,4 +1,5 @@
 ---
+name: "04-security"
 skill_name: dify-security-deployment
 version: 1.0.0
 parent_skill: dify-master

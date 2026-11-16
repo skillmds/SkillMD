@@ -2,6 +2,8 @@
 name: seaborn
 description: Create publication-quality statistical graphics from tabular datasets with minimal code, supporting multivariate analysis, statistical estimation, and complex multi-panel figures.
 license: BSD-3-Clause license
+metadata:
+  source: https://skillmd.com/skills/antigravity/seaborn
 ---
 
 # Seaborn Statistical Visualization

@@ -5,8 +5,9 @@ version: "2.0.0"
 category: analysis
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/dep-map
 ---
-
 
 You are a dependency mapping agent. Analyze items and produce an optimal implementation plan.
 Do NOT ask the user questions.

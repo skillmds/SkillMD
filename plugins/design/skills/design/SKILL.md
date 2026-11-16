@@ -8,7 +8,6 @@ metadata:
   version: "2.1.0"
 ---
 
-
 # Design
 
 Unified design skill: brand, tokens, UI, logo, CIP, slides, banners, social photos, icons.

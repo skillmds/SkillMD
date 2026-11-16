@@ -40,8 +40,9 @@ dependencies:
 version: 1.0.0
 author: Pranav Nagrecha
 updated: 2026-04-10
+metadata:
+  source: https://skillmd.com/skills/pranavnagrecha/mcae-pardot-api
 ---
-
 
 # MCAE (Pardot) API v5
 

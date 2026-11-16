@@ -17,8 +17,9 @@ allowed-tools:
   - Bash
   - WebFetch
   - Write
+metadata:
+  source: https://skillmd.com/skills/nimoqup046-collab/seo-plan
 ---
-
 
 # Strategic SEO Planning
 

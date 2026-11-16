@@ -1,15 +1,16 @@
 ---
 name: cro
-description: When the user wants to optimize, improve, or increase conversions on any marketing page or form — including homepage, landing pages, pricing pages, feature pages, lead capture forms, or contact forms. Also use when the user says 'CRO,' 'conversion rate optimization,' 'this page isn't...
-risk: unknown
+description: "When the user wants to optimize, improve, or increase conversions on any marketing page or form — including homepage, landing pages, pricing pages, feature pages, lead capture forms, or contact forms."
+risk: safe
 source: https://github.com/coreyhaines31/marketingskills/tree/main/skills/cro
 source_repo: coreyhaines31/marketingskills
 source_type: community
 date_added: 2026-07-01
 license: MIT
 license_source: https://github.com/coreyhaines31/marketingskills/blob/main/LICENSE
+metadata:
+  source: https://skillmd.com/skills/lingxling/cro
 ---
-
 
 # Conversion Rate Optimization (CRO)
 ## When to Use

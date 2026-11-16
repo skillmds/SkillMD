@@ -12,7 +12,6 @@ metadata:
     skillKey: research-paper-figure-skill-factory
 ---
 
-
 # Research Paper Figure Skill Factory
 
 This skill is a two-layer research-paper figure Skill Factory.

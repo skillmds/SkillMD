@@ -5,7 +5,6 @@ metadata:
   tags: remotion, react, markup
 ---
 
-
 This is guidance for writing Remotion React Markup.
 If this is not relevant, load [Remotion Best Practices](../remotion-best-practices/SKILL.md) instead.
 

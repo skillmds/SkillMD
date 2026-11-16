@@ -1,8 +1,9 @@
 ---
 name: kit
 description: "Kit (formerly ConvertKit) API integration with managed OAuth. Manage email subscribers, forms, tags, sequences, broadcasts, and custom fields.\n Use this skill when users want to manage their email marketing lists, create or update subscribers, manage tags, or work with email sequences and broadcasts.\n For other third party apps, use the api-gateway skill (https://clawhub.ai/byungkyu/api-gateway)."
+metadata:
+  source: https://skillmd.com/skills/dvcrn/kit
 ---
-
 
 # Kit
 

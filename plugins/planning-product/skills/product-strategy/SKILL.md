@@ -1,6 +1,6 @@
 ---
 skill_id: product
-name: Product Strategy
+name: product-strategy
 version: 1.0.0
 category: product
 office: CPO
@@ -26,8 +26,9 @@ collaborates_with:
   - product-manager
   - product-development-research
   - security-analyst
+metadata:
+  source: https://skillmd.com/skills/drnabeelkhan/product-strategy
 ---
-
 
 # Product Strategy -- Domain Dispatcher
 

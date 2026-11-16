@@ -1,6 +1,6 @@
 # Security
 
-29 Agent Skills from SkillMD.
+30 Agent Skills from SkillMD.
 https://skillmd.com/plugins/skillmd/security
 
 ## Claude Code
@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/security
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/security
+    npx get-skill add plugin:skillmd/security
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 
@@ -61,3 +61,4 @@ https://skillmd.com/agents
 - pentest-tools
 - go-rust-reverse
 - docs-generator
+- pentest-tools/src-hunter

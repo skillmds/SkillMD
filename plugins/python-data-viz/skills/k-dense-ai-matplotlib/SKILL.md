@@ -7,9 +7,11 @@ allowed-tools:
   - Bash
 license: https://github.com/matplotlib/matplotlib/tree/main/LICENSE
 compatibility: Requires Python 3.10+ and Matplotlib 3.10.x. Use `uv add matplotlib` in projects; interactive Jupyter widgets require `ipympl`.
-metadata: {"version": "1.1", "skill-author": "K-Dense Inc."}
+metadata:
+  source: https://skillmd.com/skills/k-dense-ai/matplotlib
+  version: "1.1"
+  skill-author: K-Dense Inc.
 ---
-
 
 # Matplotlib
 

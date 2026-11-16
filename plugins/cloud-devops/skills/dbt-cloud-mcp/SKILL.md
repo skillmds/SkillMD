@@ -1,5 +1,5 @@
 ---
-name: "dbt Cloud MCP"
+name: dbt-cloud-mcp
 slug: "dbt-cloud-mcp"
 description: ""
 github_stars: 12621

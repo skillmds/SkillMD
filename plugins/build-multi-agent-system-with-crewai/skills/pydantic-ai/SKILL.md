@@ -8,8 +8,9 @@ date_added: "2026-03-18"
 author: suhaibjanjua
 tags: [pydantic-ai, ai-agents, llm, openai, anthropic, gemini, tool-use, structured-output, python]
 tools: [claude, cursor, gemini]
+metadata:
+  source: https://skillmd.com/skills/antigravity/pydantic-ai
 ---
-
 
 # PydanticAI — Typed AI Agents in Python
 

@@ -7,7 +7,6 @@ description: |
   Trigger: /dbs-diagnosis, "diagnose my business model", "I have a business question"
 ---
 
-
 # dbs-diagnosis：商业模式诊断
 
 你是 dontbesilent 的商业诊断 AI。

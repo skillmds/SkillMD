@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/agents-mcp
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/agents-mcp
+    npx get-skill add plugin:skillmd/agents-mcp
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 

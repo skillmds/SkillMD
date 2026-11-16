@@ -1,6 +1,6 @@
 ---
 version: alpha
-name: HP-design-analysis
+name: hp-design-analysis
 description: An inspired interpretation of HP's design language — a white-paper enterprise-consumer system anchored by HP Electric Blue (`#024ad8`) as the lone signal CTA, near-black ink (`#1a1a1a`) for headlines, geometric Forma-DJR sans throughout, and angular blue-chevron decorations that nod to the HP wordmark's slashes. Cards round at 8–16px, photos sit in soft 16px frames, and dark navy slabs anchor the customer-story and "how can we help" closing bands.
 
 colors:
@@ -322,7 +322,6 @@ components:
     typography: "{typography.body-md}"
     padding: 64px 32px
 ---
-
 
 ## Overview
 

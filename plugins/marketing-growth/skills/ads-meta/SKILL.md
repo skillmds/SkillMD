@@ -1,8 +1,9 @@
 ---
 name: ads-meta
 description: "Audit Meta Ads measurement, Pixel and Conversions API, attribution, Facebook and Instagram creative, audiences, placements, automation, budgets, account structure, and policy. Use for Meta Ads, Facebook Ads, Instagram Ads, Advantage+, Pixel, CAPI, Events Manager, creative fatigue, or Meta campaign optimization."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-meta
 ---
-
 
 # Meta Ads Audit
 

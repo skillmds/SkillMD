@@ -1,6 +1,8 @@
 ---
 name: wwas
 description: Creates product backlog items in Why-What-Acceptance format, producing independent, valuable, testable items with strategic context.
+metadata:
+  source: https://skillmd.com/skills/comeonoliver/wwas
 ---
 # Why-What-Acceptance (WWA)
 

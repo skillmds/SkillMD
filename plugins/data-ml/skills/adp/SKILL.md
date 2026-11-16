@@ -13,7 +13,6 @@ description: >-
   server, see `/redpanda:rpk-cloud`.
 ---
 
-
 # Agentic Data Plane
 
 The Agentic Data Plane is Redpanda's governance infrastructure for AI agents and MCP servers. It is its own product surface: it runs on Redpanda and provisions its own environment when you add it. It provides a managed runtime for AI agents and MCP servers, a proxying AI Gateway for LLM providers, and governance surfaces (budgets, guardrails, Cedar access-control policies) to operate those workloads safely. This skill is written for an AI agent operating the platform programmatically via `rpk ai` and the Agentic Data Plane API or MCP tools. Optimize for correct field names and service names; confirm the live surface before acting.

@@ -4,7 +4,6 @@ description: Implements document chunking, embedding generation, vector storage,
 allowed-tools: Read, Write, Bash
 ---
 
-
 # RAG Implementation
 
 Build Retrieval-Augmented Generation systems that extend AI capabilities with external knowledge sources.

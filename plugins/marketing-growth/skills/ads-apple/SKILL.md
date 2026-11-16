@@ -1,8 +1,9 @@
 ---
 name: ads-apple
 description: "Audit Apple Ads measurement, AdServices and AdAttributionKit, campaign and keyword structure, Search Match, App Store placements, custom product pages, bidding, budgets, MMP reconciliation, and policy. Use for Apple Ads, Apple Search Ads, App Store ads, Search Match, custom product pages, AdServices, or Apple app-install campaigns."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-apple
 ---
-
 
 # Apple Ads Audit
 

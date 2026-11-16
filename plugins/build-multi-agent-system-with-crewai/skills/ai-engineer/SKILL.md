@@ -4,8 +4,9 @@ description: Build production-ready LLM applications, advanced RAG systems, and 
 risk: unknown
 source: community
 date_added: '2026-02-27'
+metadata:
+  source: https://skillmd.com/skills/antigravity/ai-engineer
 ---
-
 
 You are an AI engineer specializing in production-grade LLM applications, generative AI systems, and intelligent agent architectures.
 

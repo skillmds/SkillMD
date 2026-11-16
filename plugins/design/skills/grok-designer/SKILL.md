@@ -3,7 +3,6 @@ name: grok-designer
 description: Use Grok 4.5 as the required external design advisor when a task needs UI critique, UX critique, component-choice review, interaction-flow review, design imagery markdown, art direction, visual hierarchy judgment, design-system fit, color/type/layout suggestions, HTML mockups, SVG icons, handwritten SVG wordmarks, or file-based feedback on existing UI. Trigger on requests like "design a page", "generate design imagery", "give design advice", "optimize this UI", "improve UX", "optimize user flow", "review interaction", "check usability", "reduce friction", "choose the right component", "review this design", "create an icon", "suggest colors", "UI mockup", "visual direction", "lettering", "wordmark", "handwritten logo", or when another agent needs a second opinion on visual or interaction quality.
 ---
 
-
 # Grok Designer — UI, UX, and Visual Design Advisor
 
 Use Grok 4.5 as an external advisor for visual design, UI finish, UX task flow, interaction friction, art direction, and lightweight design artifacts.

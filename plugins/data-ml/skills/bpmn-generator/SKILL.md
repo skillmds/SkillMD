@@ -14,7 +14,6 @@ description: >
   Also use for editing or extending existing BPMN Logic-Core JSON.
 ---
 
-
 # BPMN Generator Skill v2.0 — Enterprise Edition
 
 Converts natural language process descriptions into **OMG BPMN 2.0.2 compliant** XML files and

@@ -1,6 +1,6 @@
 ---
 skill_id: growth-hacker
-name: Growth Hacker
+name: growth-hacker
 version: 1.0.0
 category: marketing
 frameworks:
@@ -23,8 +23,9 @@ priority: high
 tags: [marketing]
 created: 2026-03-14
 updated: 2026-03-14
+metadata:
+  source: https://skillmd.com/skills/drnabeelkhan/growth-hacker
 ---
-
 
 # Growth Hacker
 

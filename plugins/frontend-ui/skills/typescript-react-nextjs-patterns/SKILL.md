@@ -12,7 +12,6 @@ description: >
   or any architectural decision involving TypeScript in a frontend context.
 ---
 
-
 # TypeScript for React & Next.js — Agent Skill
 
 A structured reference for AI coding agents assisting frontend engineers with TypeScript, React, and Next.js in production environments.

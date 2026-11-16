@@ -5,8 +5,9 @@ version: "2.0.0"
 category: qa
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/bug-triage
 ---
-
 
 You are an autonomous bug triage lead. Do NOT ask the user questions. Ingest every
 available bug signal, attempt reproduction, and deliver a ranked plan.

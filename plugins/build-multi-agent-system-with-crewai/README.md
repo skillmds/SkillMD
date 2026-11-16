@@ -8,7 +8,7 @@ https://skillmd.com/plugins/skillmd/build-multi-agent-system-with-crewai
 This archive is a Claude Code plugin. You do not need to unzip it — one
 command installs it, adding the marketplace on the way:
 
-    npx skillmds@latest add plugin:skillmd/build-multi-agent-system-with-crewai
+    npx get-skill add plugin:skillmd/build-multi-agent-system-with-crewai
 
 Or add `skillmds/skillmd` as a marketplace in the Plugins tab, then:
 
