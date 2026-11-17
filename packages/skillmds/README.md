@@ -76,9 +76,13 @@ skillmd add anthropic/pdf -a claude-code cursor -g
 skillmd add anthropic/pdf --mode copy           # no links; real files per agent
 skillmd add some/skill --deny executes_scripts
 skillmd add some/skill --skip-lint
+skillmd add some/skill --with-related           # also the skills it only points at
+skillmd add some/skill --no-deps                # just this skill (for CI)
 ```
 
 Sources: a registry slug `owner/name`; a GitHub repo, subdirectory, ref (`#ref`) or named skill (`@skill`), including `tree/` and `blob/` URLs; `github:`/`gh:` to force the GitHub reading of a bare `owner/name`; a gist URL; or a local path. `--ref <ref>` overrides the ref on any GitHub source; for a registry slug it reads the skill's source repository (the repo and folder on its registry page) at that ref, not github.com/owner/name. GitLab and `git@` sources aren't supported — clone them and install from the path.
+
+**Dependencies.** A skill that hands its work to another (`Call the Skill tool with "grilling"`, `Invoke the tdd skill`) is an empty shell without it, so `add` installs the skills it calls too, silently, one line each (`also installs grilling (used by grill-me)`). The registry says which: one request per skill, three levels deep, within the same owner. If the registry can't answer, `add` reads the SKILL.md instead. Skills a skill only points at (`see`, `link`) are listed on one line (`related: a, b`) and installed with `--with-related`. `--no-deps` skips all of it; `--json` reports `alsoInstalled` and `related`.
 
 **Where skills land.** One canonical copy, linked into each agent you chose:
 
@@ -172,7 +176,7 @@ Other MCP clients:
 
 Tools: `skillmd_search`, `skillmd_get`, `skillmd_install`, `skillmd_trending`, `skillmd_recommend`, `skillmd_list_saved`, `skillmd_lint`.
 
-`skillmd_install` runs the same installer as the CLI — it validates the skill, writes one canonical copy and links it into the chosen agents — and takes `scope` (`project` | `global`), `agents`, `mode` (`link` | `copy`), `force` and `deny`. It never executes scripts. The old `dest` parameter is deprecated and is accepted only when it points at a known agent skills directory; use `scope` + `agents` instead.
+`skillmd_install` runs the same installer as the CLI — it validates the skill, writes one canonical copy and links it into the chosen agents — and takes `scope` (`project` | `global`), `agents`, `mode` (`link` | `copy`), `force`, `deny` and `with_related`. Skills the installed skill calls are installed with it and listed as `also_installed`; the ones it only points at come back as `related` and install with `with_related`. It never executes scripts. The old `dest` parameter is deprecated and is accepted only when it points at a known agent skills directory; use `scope` + `agents` instead.
 
 ### Remote server (no install)
 
