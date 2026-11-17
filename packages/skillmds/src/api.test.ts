@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { parseSkillMd } from "@skillmds/core";
 import { createClient, timedFetch, reconstructSkillMd, skillMdFor, fetchBundle, IntegrityError, RegistryError, isAllowedSourceUrl } from "./api.js";
 import { MAX_PACK_BYTES } from "./limits.js";
+import { describeFailure } from "./retry.js";
 
 // createClient resolves its base + token through config.ts, so every client
 // built here is handed empty sources: the developer's real ~/.skillmd/config.json
@@ -294,5 +295,167 @@ describe("createClient", () => {
     const f: FetchLike = async () => jsonResponse({ ok: 1 });
     expect(createClient({ api: "https://api.test" }, { fetch: f, sources: { env: {}, config } }).hasToken).toBe(true);
     expect(createClient({ api: "https://other.test" }, { fetch: f, sources: { env: {}, config } }).hasToken).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Riding out a busy registry. The retry rules themselves are pinned in
+// retry.test.ts; these pin that the client and the bundle fetch use them, and
+// that asking for it is the only way to get it (the single-skill path keeps
+// answering a 429 at once, as it always did).
+// ---------------------------------------------------------------------------
+describe("createClient with retry", () => {
+  const sleeper = () => {
+    const waits: number[] = [];
+    return { waits, retry: { sleep: async (ms: number) => { waits.push(ms); }, jitter: () => 0 } };
+  };
+  const answers = (...rs: Response[]) => {
+    let n = 0;
+    const f = (async () => rs[Math.min(n++, rs.length - 1)]!.clone()) as unknown as FetchLike;
+    return { f, calls: () => n };
+  };
+
+  it("retries a 429 and returns the answer that follows", async () => {
+    const s = sleeper();
+    const a = answers(new Response("slow down", { status: 429, headers: { "retry-after": "2" } }), jsonResponse({ ok: 1 }));
+    const c = createClient({ api: "https://api.test" }, { fetch: a.f, sources: NO_SOURCES, retry: s.retry });
+    await expect(c.api("/x")).resolves.toEqual({ ok: 1 });
+    expect(a.calls()).toBe(2);
+    expect(s.waits).toEqual([2000]);
+  });
+
+  it("gives up on a 429 that will not clear, saying how long the server asked for", async () => {
+    const s = sleeper();
+    const a = answers(new Response("", { status: 429, headers: { "retry-after": "30" } }));
+    const c = createClient({ api: "https://api.test" }, { fetch: a.f, sources: NO_SOURCES, retry: s.retry });
+    const err = (await c.api("/x").catch((e) => e)) as RegistryError;
+    expect(err).toBeInstanceOf(RegistryError);
+    expect(err.status).toBe(429);
+    expect(err.message).toBe("rate limited by the SkillMD API, try again in 30 s");
+    expect(a.calls()).toBe(1);
+  });
+
+  it("does not retry a 404", async () => {
+    const s = sleeper();
+    const a = answers(new Response("nope", { status: 404 }));
+    const c = createClient({ api: "https://api.test" }, { fetch: a.f, sources: NO_SOURCES, retry: s.retry });
+    await expect(c.api("/x")).rejects.toMatchObject({ status: 404 });
+    expect(a.calls()).toBe(1);
+  });
+
+  it("keeps the old behaviour, one attempt, when no retry is asked for", async () => {
+    const a = answers(new Response("slow down", { status: 429, headers: { "retry-after": "1" } }), jsonResponse({ ok: 1 }));
+    const c = createClient({ api: "https://api.test" }, { fetch: a.f, sources: NO_SOURCES });
+    await expect(c.api("/x")).rejects.toMatchObject({ status: 429 });
+    expect(a.calls()).toBe(1);
+  });
+
+  it("still words a network failure the way it always did", async () => {
+    const s = sleeper();
+    const f = (async () => { throw new TypeError("fetch failed", { cause: new Error("getaddrinfo ENOTFOUND api.test") }); }) as unknown as FetchLike;
+    const c = createClient({ api: "https://api.test" }, { fetch: f, sources: NO_SOURCES, retry: s.retry });
+    await expect(c.api("/x")).rejects.toThrow(/could not reach https:\/\/api\.test: getaddrinfo ENOTFOUND/);
+    expect(s.waits).toEqual([1000, 2000, 4000]);
+  });
+
+  it("gives the client's own fetch the same retries", async () => {
+    const s = sleeper();
+    const a = answers(new Response("", { status: 503 }), new Response("zip", { status: 200 }));
+    const c = createClient({ api: "https://api.test" }, { fetch: a.f, sources: NO_SOURCES, retry: s.retry });
+    const r = await c.fetch("https://api.test/zip");
+    expect(await r.text()).toBe("zip");
+    expect(s.waits).toEqual([1000]);
+  });
+});
+
+describe("fetchBundle on a busy registry", () => {
+  const retry = () => {
+    const waits: number[] = [];
+    return { waits, retry: { sleep: async (ms: number) => { waits.push(ms); }, jitter: () => 0 } };
+  };
+  const SKILL = { path: "SKILL.md", content_base64: Buffer.from("# s").toString("base64"), sha256: sha("# s") };
+
+  it("retries the bundle request when asked to", async () => {
+    const r = retry();
+    let n = 0;
+    const f: FetchLike = async () => (n++ === 0 ? new Response("", { status: 429, headers: { "retry-after": "1" } }) : jsonResponse({ files: [SKILL] }));
+    const out = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, retry: r.retry });
+    expect(out?.map((x) => x.path)).toEqual(["SKILL.md"]);
+    expect(r.waits).toEqual([1000]);
+  });
+
+  it("retries a companion link too", async () => {
+    const r = retry();
+    let linkTries = 0;
+    const f: FetchLike = async (url) => {
+      if (String(url).includes("/bundle")) return jsonResponse({ files: [SKILL, { path: "ref.md", source_url: "https://raw.githubusercontent.com/o/r/abc/ref.md", sha256: sha("REF") }] });
+      return linkTries++ === 0 ? new Response("", { status: 503 }) : new Response("REF", { status: 200 });
+    };
+    const out = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, retry: r.retry });
+    expect(out?.map((x) => x.path)).toEqual(["SKILL.md", "ref.md"]);
+    expect(r.waits).toEqual([1000]);
+  });
+
+  it("still answers null for an unavailable bundle unless told to be strict", async () => {
+    const r = retry();
+    const f: FetchLike = async () => new Response("", { status: 404 });
+    await expect(fetchBundle("https://api.test", "o/n", undefined, { fetch: f, retry: r.retry })).resolves.toBeNull();
+  });
+
+  describe("strict", () => {
+    it("says why the bundle could not be had instead of answering null", async () => {
+      const r = retry();
+      const f: FetchLike = async () => new Response("", { status: 429, headers: { "retry-after": "2" } });
+      const err = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, retry: r.retry, strict: true }).catch((e) => e);
+      expect(err).toBeInstanceOf(RegistryError);
+      expect(err.status).toBe(429);
+      expect(describeFailure(err)).toBe("HTTP 429, retry in 2 s");
+    });
+
+    it("names a plain HTTP failure of the bundle request", async () => {
+      const f: FetchLike = async () => new Response("", { status: 404 });
+      const err = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, strict: true }).catch((e) => e);
+      expect(err).toBeInstanceOf(RegistryError);
+      expect(err.status).toBe(404);
+    });
+
+    it("names a network failure of the bundle request", async () => {
+      const f = (async () => { throw new TypeError("fetch failed"); }) as unknown as FetchLike;
+      await expect(fetchBundle("https://api.test", "o/n", undefined, { fetch: f, strict: true })).rejects.toThrow(/could not reach https:\/\/api\.test/);
+    });
+
+    it("names the companion it could not get and why", async () => {
+      const r = retry();
+      const f: FetchLike = async (url) => String(url).includes("/bundle")
+        ? jsonResponse({ files: [SKILL, { path: "agents/openai.yaml", source_url: "https://raw.githubusercontent.com/o/r/abc/openai.yaml" }] })
+        : new Response("", { status: 429, headers: { "retry-after": "2" } });
+      const missing: string[] = [];
+      const err = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, retry: r.retry, strict: true, missing }).catch((e) => e);
+      expect(err).toBeInstanceOf(RegistryError);
+      expect(err.message).toBe("could not fetch agents/openai.yaml: HTTP 429, retry in 2 s");
+      // A busy registry is not a file that is gone: nothing is reported as missing.
+      expect(missing).toEqual([]);
+    });
+
+    it("still treats a companion the source repo has deleted as gone, not failed", async () => {
+      const f: FetchLike = async (url) => String(url).includes("/bundle")
+        ? jsonResponse({ files: [SKILL, { path: "references/gone.md", source_url: "https://raw.githubusercontent.com/o/r/main/references/gone.md" }] })
+        : new Response("404: Not Found", { status: 404 });
+      const missing: string[] = [];
+      const out = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, strict: true, missing });
+      expect(out?.map((x) => x.path)).toEqual(["SKILL.md"]);
+      expect(missing).toEqual(["references/gone.md"]);
+    });
+
+    it("refuses a bundle response that holds no file list", async () => {
+      const f: FetchLike = async () => jsonResponse({ nope: true });
+      await expect(fetchBundle("https://api.test", "o/n", undefined, { fetch: f, strict: true })).rejects.toThrow(/unreadable/);
+    });
+
+    it("still returns a good bundle", async () => {
+      const f: FetchLike = async () => jsonResponse({ files: [SKILL] });
+      const out = await fetchBundle("https://api.test", "o/n", undefined, { fetch: f, strict: true });
+      expect(out?.map((x) => x.path)).toEqual(["SKILL.md"]);
+    });
   });
 });

@@ -5,6 +5,8 @@ import { isAllowedSourceUrl } from "@skillmds/core";
 import { FETCH_TIMEOUT_MS, MAX_PACK_BYTES, MAX_PACK_FILES } from "./limits.js";
 import { resolveApi, resolveToken, realSources, hostOf, DEFAULT_API } from "./config.js";
 import { IntegrityError, RegistryError } from "./errors.js";
+import { describeFailure, retryingFetch } from "./retry.js";
+import type { RetryOptions } from "./retry.js";
 import type { GlobalFlags, ResolveSources } from "./config.js";
 
 // SKILL.md materialization + the companion-file SSRF guard live in
@@ -16,6 +18,26 @@ export interface ClientOptions {
   fetch?: typeof fetch;
   sources?: ResolveSources;
   timeoutMs?: number;
+  /** Ride out a busy registry: retry 429/502/503/504 and network errors (see
+   *  retry.ts). Absent, a request is made once, as it always was. Each attempt
+   *  gets its own timeout. */
+  retry?: RetryOptions;
+}
+
+/** Why a request never got an answer, in words: the timeout named, else the
+ *  underlying cause (DNS, refused connection, proxy denial). */
+function networkReason(e: unknown, timeoutMs: number): string {
+  const cause = e instanceof Error ? ((e.cause as Error | undefined)?.message ?? e.message) : String(e);
+  // AbortSignal.timeout surfaces either as a bare TimeoutError (DOMException)
+  // or wrapped in a TypeError("fetch failed") whose cause is the TimeoutError.
+  const isTimeout = e instanceof Error && (e.name === "TimeoutError" || (e.cause instanceof Error && e.cause.name === "TimeoutError"));
+  return isTimeout ? `timed out after ${Math.round(timeoutMs / 1000)}s` : cause;
+}
+
+/** A failed request as the RegistryError a caller can read the status from.
+ *  One the retry helper already made (a rate limit, say) passes through. */
+function asRegistryError(e: unknown, base: string, timeoutMs: number): RegistryError {
+  return e instanceof RegistryError ? e : new RegistryError(`could not reach ${base}: ${networkReason(e, timeoutMs)}`);
 }
 
 /** fetch with a hard deadline. Node >=18 supports AbortSignal.timeout. */
@@ -30,7 +52,10 @@ export function createClient(flags: GlobalFlags = {}, opts: ClientOptions = {}) 
   const base = resolveApi(flags, src);
   const token = resolveToken(flags, src);
   const timeoutMs = opts.timeoutMs ?? FETCH_TIMEOUT_MS;
-  const doFetch = timedFetch(opts.fetch ?? fetch, timeoutMs);
+  const timed = timedFetch(opts.fetch ?? fetch, timeoutMs);
+  // Retrying sits OUTSIDE the timeout, so every attempt gets a fresh deadline
+  // instead of one shared by all the attempts and the waits between them.
+  const doFetch = opts.retry ? retryingFetch(timed, opts.retry) : timed;
   const host = hostOf(base);
 
   async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
@@ -40,12 +65,7 @@ export function createClient(flags: GlobalFlags = {}, opts: ClientOptions = {}) 
     try {
       res = await doFetch(base + path, { ...init, headers });
     } catch (e) {
-      const cause = e instanceof Error ? ((e.cause as Error | undefined)?.message ?? e.message) : String(e);
-      // AbortSignal.timeout surfaces either as a bare TimeoutError (DOMException)
-      // or wrapped in a TypeError("fetch failed") whose cause is the TimeoutError.
-      const isTimeout = e instanceof Error && (e.name === "TimeoutError" || (e.cause instanceof Error && e.cause.name === "TimeoutError"));
-      const why = isTimeout ? `timed out after ${Math.round(timeoutMs / 1000)}s` : cause;
-      throw new RegistryError(`could not reach ${base}: ${why}`);
+      throw asRegistryError(e, base, timeoutMs);
     }
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
@@ -71,6 +91,15 @@ export interface BundleFile {
 export interface BundleOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /** Retry a busy registry (and a busy source host) as retryingFetch does. */
+  retry?: RetryOptions;
+  /** Say why instead of answering null. An unavailable bundle, an unreadable
+   *  response and a companion that could not be fetched all throw a
+   *  RegistryError naming the cause, so a caller can refuse to install a pack
+   *  without its files instead of quietly installing its SKILL.md alone.
+   *  A companion the source repo answers 404 or 410 for is still "gone": it is
+   *  reported through `missing` (when given) and the rest installs. */
+  strict?: boolean;
   /** When given, a companion the registry only links to and the source repo
    *  no longer serves is skipped and its path pushed here, and the rest of the
    *  bundle still installs. Without it such a file fails the whole fetch, which
@@ -98,13 +127,29 @@ export interface BundleOptions {
  *  Returns null if the bundle is unavailable, letting the caller fall back to
  *  GitHub. */
 export async function fetchBundle(base: string, slug: string, token?: string, opts: BundleOptions = {}): Promise<BundleFile[] | null> {
-  const doFetch = timedFetch(opts.fetch ?? fetch, opts.timeoutMs ?? FETCH_TIMEOUT_MS);
+  const timeoutMs = opts.timeoutMs ?? FETCH_TIMEOUT_MS;
+  const timed = timedFetch(opts.fetch ?? fetch, timeoutMs);
+  const doFetch = opts.retry ? retryingFetch(timed, opts.retry) : timed;
+  const strict = Boolean(opts.strict);
   const headers: Record<string, string> = { accept: "application/json" };
   if (token) headers.authorization = `Bearer ${token}`;
-  const res = await doFetch(`${base}/api/skills/${slug}/bundle?format=json`, { headers }).catch(() => null);
-  if (!res || !res.ok) return null;
+  const path = `/api/skills/${slug}/bundle`;
+  let res: Response | null;
+  try {
+    res = await doFetch(`${base}${path}?format=json`, { headers });
+  } catch (e) {
+    if (strict) throw asRegistryError(e, base, timeoutMs);
+    res = null;
+  }
+  if (!res || !res.ok) {
+    if (strict) throw new RegistryError(`SkillMD API ${res?.status} on ${path}`, res?.status);
+    return null;
+  }
   const data = (await res.json().catch(() => null)) as { files?: { path: string; content_base64?: string; source_url?: string; sha256?: string | null }[] } | null;
-  if (!data?.files) return null;
+  if (!data?.files) {
+    if (strict) throw new RegistryError(`unreadable bundle response on ${path}`, res.status);
+    return null;
+  }
   if (data.files.length > MAX_PACK_FILES) throw new Error(`pack too large: > ${MAX_PACK_FILES} files`);
   const out: BundleFile[] = [];
   let bytes = 0;
@@ -114,13 +159,21 @@ export async function fetchBundle(base: string, slug: string, token?: string, op
     if (f.content_base64 != null) {
       contents = Buffer.from(f.content_base64, "base64");
     } else if (f.source_url && isAllowedSourceUrl(f.source_url)) {
-      const r = await doFetch(f.source_url).catch(() => null);
+      let failure: unknown;
+      const r = await doFetch(f.source_url).catch((e) => { failure = e; return null; });
       if (!r || !r.ok) {
         // Moved or deleted upstream. One such link used to fail the whole
         // bundle, and `add owner/name` then fell back to fetching the registry
         // slug as a GitHub repo, which does not exist: the install failed with
         // a misleading 404 instead of installing everything else.
-        if (opts.missing) { opts.missing.push(f.path); continue; }
+        // Strictly, only an answer that says "gone" counts as gone: a busy host
+        // or a dropped connection is a failure to name, not a file to skip.
+        const gone = r !== null && (r.status === 404 || r.status === 410);
+        if (opts.missing && (!strict || gone)) { opts.missing.push(f.path); continue; }
+        if (strict) {
+          const cause = failure ?? new RegistryError(`HTTP ${r?.status}`, r?.status);
+          throw new RegistryError(`could not fetch ${f.path}: ${describeFailure(cause)}`, cause instanceof RegistryError ? cause.status : undefined, cause instanceof RegistryError ? cause.retryAfterSec : undefined);
+        }
         throw new Error(`could not fetch companion file "${f.path}" from ${hostOf(f.source_url)}`);
       }
       contents = Buffer.from(await r.arrayBuffer());
