@@ -1,6 +1,7 @@
 import { Command, Option } from "commander";
 import { homedir } from "node:os";
 import * as p from "../prompts.js";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import pc from "picocolors";
 import { lint, parseSkillMd } from "@skillmds/core";
@@ -9,7 +10,7 @@ import type { BundleFile, Client, RegistrySkill } from "../api.js";
 import { collectFiles, resolvePackFiles, resolveSource, resolveTree } from "../source.js";
 import type { ResolvedSkill, TreeFile } from "../source.js";
 import { looksLikeProject } from "../project.js";
-import { agentDir, agentSupportsGlobal, detectAgents } from "../agents.js";
+import { agentDir, agentSupportsGlobal, canonicalDir, detectAgents } from "../agents.js";
 import { installSkill } from "../installer.js";
 import { readLock } from "../lock.js";
 import type { InstallResult, InstallTarget, SkillFileInput } from "../installer.js";
@@ -22,6 +23,7 @@ import { readConfig, writeConfig, telemetryDisabled } from "../config.js";
 import type { ResolveSources } from "../config.js";
 import { createPacer, describeFailure } from "../retry.js";
 import type { RetryOptions } from "../retry.js";
+import { expandPointers } from "../alsoInstall.js";
 import { completeMembers, fetchPackManifest, fetchPackZip, openPluginArchive } from "../plugin.js";
 import type { CompletedMember } from "../plugin.js";
 import { safeText } from "../sanitize.js";
@@ -96,6 +98,10 @@ export interface AddCandidate {
   companionsMissing?: boolean;
   /** The plugin this came out of. */
   plugin?: { name: string; missing: string[] };
+  /** The registry's record of the source repository, when it had one. */
+  sourceRepo?: string;
+  /** The skill that pointed at this one: it is here because that skill needs it. */
+  usedBy?: string;
 }
 
 export interface AddDeps {
@@ -115,6 +121,10 @@ export interface AddDeps {
   needsPrompt?: boolean;
   /** The clock the run's elapsed time is read from. Defaults to Date.now. */
   now?: () => number;
+  /** A skill that from points at by name, looked up beyond what the run already
+   *  holds (the registry, for a skill installed on its own). null for anything
+   *  it cannot say yes to: a pointer is never worth an error. */
+  resolvePointer?: (name: string, from: AddCandidate, flags: AddFlags) => Promise<AddCandidate | null>;
 }
 
 
@@ -262,7 +272,7 @@ export async function registryCandidate(
   owner: string,
   name: string,
   source: string,
-  client: Pick<Client, "api" | "base" | "token">,
+  client: Pick<Client, "api" | "base" | "token"> & { fetch?: typeof fetch },
   opts: CandidateOptions = {},
 ): Promise<AddCandidate> {
   const skill = await client.api<RegistrySkill>(`/api/skills/${owner}/${name}`);
@@ -320,7 +330,7 @@ async function candidateFromRecord(
   owner: string,
   name: string,
   source: string,
-  client: Pick<Client, "api" | "base" | "token">,
+  client: Pick<Client, "api" | "base" | "token"> & { fetch?: typeof fetch },
   opts: CandidateOptions,
 ): Promise<AddCandidate> {
   const registrySlug = `${owner}/${name}`;
@@ -328,6 +338,7 @@ async function candidateFromRecord(
   const meta = {
     name: skillName, slug: skillName, registrySlug, source, commit_sha: skill.commit_sha ?? undefined,
     verified: skill.verified, type: skill.type, securityFlags: skill.security_flags,
+    ...(skill.source_repo ? { sourceRepo: skill.source_repo } : {}),
   };
   // --ref asks for the source at a ref the registry's pinned bundle can't hold.
   if (opts.ref) return { ...meta, ...(await resolveAtRef(skill, opts.ref, opts.fetchTree)) };
@@ -338,7 +349,7 @@ async function candidateFromRecord(
   const missing: string[] = [];
   let bundle: BundleFile[] | null = null;
   try {
-    bundle = await fetchBundle(client.base, registrySlug, client.token, { missing });
+    bundle = await fetchBundle(client.base, registrySlug, client.token, { missing, ...(client.fetch ? { fetch: client.fetch } : {}) });
   } catch (e) {
     // A failed integrity check must never silently downgrade to an
     // unverified GitHub fetch — surface it so the install hard-blocks.
@@ -384,7 +395,7 @@ export interface SlugHooks {
 export async function resolveRegistrySlug(
   spec: Extract<SourceSpec, { kind: "slug" }>,
   source: string,
-  client: Pick<Client, "api" | "base" | "token">,
+  client: Pick<Client, "api" | "base" | "token"> & { fetch?: typeof fetch },
   hooks: SlugHooks = {},
 ): Promise<AddCandidate[]> {
   // Registry failure other than a 404. A 404 means "not a registry slug" and
@@ -572,13 +583,20 @@ async function candidatesFromManifest(
   if (!manifest.members.length) throw new Error(`plugin ${spec.owner}/${spec.slug} has no installable skills`);
   const archive = await openPluginArchive(manifest, zip);
   if (!archive.members.length) throw new Error(`plugin ${spec.owner}/${spec.slug} returned no readable skills`);
+  // Every member's SKILL.md came with the archive. Their companions are only
+  // worth fetching for the skills this run installs: the ones asked for with
+  // --skill, and the ones those point at.
+  const nodes = archive.members.map((member) => ({ name: member.dir, registrySlug: member.slug, raw: member.raw, member, usedBy: undefined as string | undefined }));
+  const wanted = await pickedBy(flags, nodes.filter((n) => flags.skill?.includes(n.name)), nodes);
   // --list reads only each SKILL.md: no companion is worth a request for that.
   const completed: CompletedMember[] = flags.list
     ? archive.members.map((member) => ({ member, unverified: 0 }))
-    : await completeMembers(archive, archive.members, { fetch: client.fetch, base: client.base, token: client.token });
+    : await completeMembers(archive, wanted.map((n) => n.member), { fetch: client.fetch, base: client.base, token: client.token });
+  const usedBy = new Map(wanted.map((n) => [n.member.dir, n.usedBy]));
   const plugin = { name: archive.name, missing: archive.missing };
   const out: AddCandidate[] = completed.map((c) => ({
     name: c.member.dir, slug: c.member.dir, registrySlug: c.member.slug, source,
+    ...(usedBy.get(c.member.dir) ? { usedBy: usedBy.get(c.member.dir) } : {}),
     raw: c.member.raw, verified: c.member.verified, type: c.member.type,
     // A member with no companions is just its SKILL.md; nothing to list.
     ...(c.files && c.files.length > 1 ? { files: c.files } : {}),
@@ -586,8 +604,19 @@ async function candidatesFromManifest(
     ...(c.unverified ? { quietNotes: [unverifiedFilesNote(c.unverified)] } : {}),
     plugin,
   }));
-  out[0]!.quietNotes = [...(out[0]!.quietNotes ?? []), pluginNote(out.length, archive.name, archive.missing.length)];
+  if (out.length) out[0]!.quietNotes = [...(out[0]!.quietNotes ?? []), pluginNote(out.length, archive.name, archive.missing.length)];
   return out;
+}
+
+/** The members a run installs. With no --skill (or '*', or --list) that is all
+ *  of them; with --skill it is the ones named, plus what they point at. */
+async function pickedBy<T extends { name: string; raw: string; registrySlug?: string; usedBy?: string }>(
+  flags: AddFlags,
+  named: T[],
+  all: T[],
+): Promise<T[]> {
+  if (!flags.skill?.length || flags.skill.includes("*") || flags.list) return all;
+  return expandPointers(named, all);
 }
 
 /** The route for a registry that has no manifest: the member list, the archive
@@ -622,7 +651,8 @@ async function candidatesFromListing(
   // companions and needs its bundle. A plugin's whole membership can be packs,
   // so the requests are paced below the API's ceiling and ridden out, and a
   // pack whose bundle will not come is blocked rather than installed bare.
-  const multi = flags.list ? [] : out.filter((c) => c.type === "pack");
+  const wanted = await pickedBy(flags, out.filter((c) => flags.skill?.includes(c.name)), out);
+  const multi = flags.list ? [] : wanted.filter((c) => c.type === "pack");
   if (multi.length) {
     const raw = net.fetch ?? fetch;
     const pace = createPacer(PACE_MS, { now: net.retry?.now, sleep: net.retry?.sleep });
@@ -652,8 +682,37 @@ async function candidatesFromListing(
       }
     }));
   }
-  out[0]!.quietNotes = [...(out[0]!.quietNotes ?? []), pluginNote(out.length, packName, plugin.missing.length)];
-  return out;
+  if (wanted.length) wanted[0]!.quietNotes = [...(wanted[0]!.quietNotes ?? []), pluginNote(wanted.length, packName, plugin.missing.length)];
+  return wanted;
+}
+
+/** A repository as a comparable string: owner/repo, lowercase, however it was written. */
+function repoKey(r: string | null | undefined): string | undefined {
+  const k = r?.trim().toLowerCase().replace(/^(?:https?:\/\/(?:www\.)?github\.com\/|github:)/, "").replace(/\.git$/, "").replace(/\/+$/, "");
+  return k || undefined;
+}
+
+/** `owner/name` in the registry, for a skill that points at `name`. It has to
+ *  exist (the registry answers 404 for anything not public), and when both
+ *  records say where they come from it has to be the same repository: a skill
+ *  of the same name from somewhere else is not the one that was meant. */
+async function registryPointer(name: string, from: AddCandidate, client: Client): Promise<AddCandidate | null> {
+  const owner = from.registrySlug!.split("/")[0]!;
+  const skill = await client.api<RegistrySkill>(`/api/skills/${owner}/${name}`);
+  const a = repoKey(from.sourceRepo);
+  const b = repoKey(skill.source_repo);
+  if (a && b && a !== b) return null;
+  const source = `registry:${owner}/${name}`;
+  try {
+    return await candidateFromRecord(skill, owner, name, source, client, {});
+  } catch (e) {
+    // The pointed skill failed its integrity check: that is a blocked skill
+    // like any other, not something to skip over.
+    if (e instanceof IntegrityError) {
+      return { name, slug: name, registrySlug: `${owner}/${name}`, source, raw: "", unavailable: e.message };
+    }
+    return null;
+  }
 }
 
 /** The real deps. Built per run, because whether a prompt may be opened is a
@@ -667,6 +726,7 @@ export function makeDefaultDeps(flags: AddFlags, net: NetOverrides = {}): AddDep
   // A plugin installs one ping per skill. They are told apart from the install
   // itself by never being waited for, and from each other by never more than
   // MAX_PINGS being in flight, so a 39-skill plugin does not end in a 39-request burst.
+  let pointerClient: Client | undefined;
   let pingApi: Client["api"] | undefined;
   let pingsActive = 0;
   const pingQueue: (() => void)[] = [];
@@ -691,8 +751,18 @@ export function makeDefaultDeps(flags: AddFlags, net: NetOverrides = {}): AddDep
           ...(spec.kind === "local" && r.file ? { files: collectFiles(dirname(r.file), dirname(r.file)) } : {}),
         }));
       }
-      const { api, base: apiBase, token } = createClient(f, { fetch: net.fetch, sources: net.sources });
-      return resolveRegistrySlug(spec, source, { api, base: apiBase, token });
+      const { api, base: apiBase, token, fetch: doFetch } = createClient(f, { fetch: net.fetch, sources: net.sources });
+      return resolveRegistrySlug(spec, source, { api, base: apiBase, token, fetch: doFetch });
+    },
+    async resolvePointer(name, from, f) {
+      // Only a skill the registry itself gave us has an owner to look in.
+      if (!from.registrySlug || !/^(registry|plugin):/.test(from.source ?? "")) return null;
+      try {
+        pointerClient ??= createClient(f, { fetch: net.fetch, sources: net.sources, retry: net.retry ?? {} });
+        return await registryPointer(name, from, pointerClient);
+      } catch {
+        return null;
+      }
     },
     get promptScope() { return canPrompt() ? promptScopeInteractive : undefined; },
     get promptAgents() { return canPrompt() ? promptAgentsInteractive : undefined; },
@@ -788,7 +858,7 @@ interface InstalledDoc {
 }
 
 type CandidateRecord =
-  | { kind: "installed"; doc: InstalledDoc; score: number; securityFlags: string[]; notices: Notice[]; source: string; replaced?: string }
+  | { kind: "installed"; doc: InstalledDoc; score: number; securityFlags: string[]; notices: Notice[]; source: string; replaced?: string; usedBy?: string }
   | { kind: "blocked"; name: string; reason: string; message: string };
 
 /** What the terminal says about a run beyond its records. */
@@ -799,6 +869,8 @@ interface RunView {
   agents: string[];
   /** Members a plugin lists that its archive did not hold. */
   missing: string[];
+  /** Plain remarks drawn right under the header. */
+  infos: string[];
   /** Time spent working, prompts excluded. */
   elapsedMs: number;
 }
@@ -831,7 +903,8 @@ function finish(flags: AddFlags, outcome: AddOutcome): AddResult {
         ...outcome.records.flatMap((r) => (r.kind === "installed" ? r.notices : [])),
       ].map((n) => n.text);
       const exitCode: 0 | 1 = blocked.length > 0 || (installed.length === 0 && !outcome.managed) ? 1 : 0;
-      const doc = { ok: exitCode === 0, scope: outcome.scope, installed, blocked, warnings };
+      const also = outcome.records.flatMap((r) => (r.kind === "installed" && r.usedBy ? [{ name: r.doc.name, usedBy: r.usedBy }] : []));
+      const doc = { ok: exitCode === 0, scope: outcome.scope, installed, blocked, warnings, ...(also.length ? { alsoInstalled: also } : {}) };
       return {
         written, blocked, exitCode,
         output: json ? JSON.stringify(doc, null, 2) : renderHuman(outcome.notices, outcome.records, outcome.paths, outcome.view),
@@ -887,7 +960,7 @@ function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathC
       else for (const n of r.notices) if (drawn(n)) problems.push({ kind: "warn", text: n.text });
     }
     for (const slug of missing) problems.push({ kind: "warn", text: `${slug}: not in the plugin archive` });
-    lines.push(renderCompactRun({ label: view.label, agents: view.agents, installed, problems, infos: [], elapsedMs: view.elapsedMs }));
+    lines.push(renderCompactRun({ label: view.label, agents: view.agents, installed, problems, infos: view.infos, elapsedMs: view.elapsedMs }));
     return lines.join("\n");
   }
   for (const r of records) {
@@ -913,10 +986,17 @@ function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathC
 }
 
 /** Ask the deps what the argument contains, then narrow it with --skill. */
-async function resolveCandidates(arg: string, flags: AddFlags, deps: AddDeps): Promise<AddCandidate[]> {
-  const candidates = await deps.resolve(arg, flags);
-  if (!flags.skill?.length) return candidates;
-  return candidates.filter((c) => flags.skill!.includes(c.name) || flags.skill!.includes("*"));
+async function resolveCandidates(arg: string, flags: AddFlags, deps: AddDeps): Promise<{ selected: AddCandidate[]; pool: AddCandidate[] }> {
+  const pool = await deps.resolve(arg, flags);
+  if (!flags.skill?.length) return { selected: pool, pool };
+  // A skill pulled in by a pointer was chosen by the skill that points at it.
+  return { selected: pool.filter((c) => c.usedBy || flags.skill!.includes(c.name) || flags.skill!.includes("*")), pool };
+}
+
+/** Where a skill of this name would land in this scope, if something is there. */
+function alreadyThere(name: string, scope: Scope): boolean {
+  const lockScope = { global: Boolean(scope.global), cwd: scope.cwd, home: scope.home };
+  return Boolean(readLock(lockScope).skills[name]) || existsSync(join(canonicalDir(scope), name));
 }
 
 /** Everything that ends a run before a single byte is written. Returns the
@@ -1059,6 +1139,7 @@ async function installOne(c: AddCandidate, ctx: InstallContext): Promise<Candida
     notices,
     source,
     ...(out.replaced ? { replaced: out.replaced } : {}),
+    ...(c.usedBy ? { usedBy: c.usedBy } : {}),
   };
 }
 
@@ -1168,8 +1249,9 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
   // the clock is read around the resolving and around the installing only.
   const resolveStart = now();
   let candidates: AddCandidate[];
+  let pool: AddCandidate[];
   try {
-    candidates = await resolveCandidates(arg, flags, d);
+    ({ selected: candidates, pool } = await resolveCandidates(arg, flags, d));
   } catch (e) {
     // An integrity failure blocks the install cleanly (never writes the bytes).
     if (e instanceof IntegrityError) {
@@ -1181,9 +1263,15 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
     throw e;
   }
 
-  const resolveMs = now() - resolveStart;
+  let resolveMs = now() - resolveStart;
   const early = gate(flags, d, candidates);
   if (early) return early;
+
+  // The skills these point at come too (see alsoInstall.ts). Done once the run
+  // is known to be an install, so --list shows what a source holds and no more.
+  const pointerStart = now();
+  candidates = await expandPointers(candidates, pool, d.resolvePointer ? { extra: (name, from) => d.resolvePointer!(name, from, flags) } : {});
+  resolveMs += now() - pointerStart;
 
   const resolved = await scopeOf();
   if (!resolved) return finish(flags, { kind: "cancel" });
@@ -1203,6 +1291,10 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
   const ctx: InstallContext = { arg, flags, deny: new Set(flags.deny ?? []), scope, targets: chosen.targets, env, deps: d };
   const records: CandidateRecord[] = [];
   const installStart = now();
+  // A skill that was only pulled in, and is already installed, has done its job:
+  // replacing it, or refusing to over a different source, would be failing the
+  // install over a pointer.
+  candidates = candidates.filter((c) => !(c.usedBy && alreadyThere(c.name, scope)));
   for (const c of candidates) records.push(await installOne(c, ctx));
   const elapsedMs = resolveMs + (now() - installStart);
 
@@ -1211,6 +1303,7 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
     label: runLabel(candidates, arg, paths),
     agents: chosen.targets,
     missing: candidates[0]?.plugin?.missing ?? [],
+    infos: records.flatMap((r) => (r.kind === "installed" && r.usedBy ? [`also installs ${r.doc.name} (used by ${r.usedBy})`] : [])),
     elapsedMs,
   };
   return finish(flags, { kind: "install", scope: scope.global ? "global" : "project", records, notices, paths, view, ...(managed ? { managed: managed.name } : {}) });

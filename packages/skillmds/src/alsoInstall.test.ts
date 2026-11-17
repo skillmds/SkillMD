@@ -101,3 +101,11 @@ describe("expandPointers", () => {
     expect(names(out)).toEqual(["alpha", "beta"]);
   });
 });
+
+describe("expandPointers and a skill that is not going in", () => {
+  it("follows nothing out of a skill that could not be had", async () => {
+    const pool = [{ name: "alpha", raw: "Use the beta skill.", unavailable: "could not fetch a.md: HTTP 429" }, { name: "beta", raw: "" }];
+    const out = await expandPointers([pool[0]!], pool);
+    expect(out.map((n) => n.name)).toEqual(["alpha"]);
+  });
+});

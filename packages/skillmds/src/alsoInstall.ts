@@ -21,6 +21,8 @@ export interface PointerNode {
   raw: string;
   /** The skill that pulled this one in, when one did. */
   usedBy?: string;
+  /** Why it cannot be installed. A skill that is not going in pulls nothing in. */
+  unavailable?: string;
 }
 
 const lower = (s: string | undefined) => s?.toLowerCase();
@@ -55,7 +57,7 @@ export async function expandPointers<T extends PointerNode>(
   while (frontier.length) {
     const next: typeof frontier = [];
     for (const { node, depth } of frontier) {
-      if (depth >= MAX_POINTER_DEPTH) continue;
+      if (depth >= MAX_POINTER_DEPTH || node.unavailable) continue;
       for (const x of skillPointers(node.raw, node.name)) {
         if (has(x) || misses.has(x)) continue;
         let target: T | null | undefined = pool.find((p) => answersTo(p, x));

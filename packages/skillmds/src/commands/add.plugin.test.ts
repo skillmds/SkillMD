@@ -543,3 +543,261 @@ describe("the terminal output of a plugin install", () => {
     expect(out).not.toMatch(/^Installing /m);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pointer skills. mattpocock/grill-me has a whole body of `Call the Skill tool
+// with "grilling".`: installed alone it is an empty shell, so the skill it
+// points at comes with it. A pointer that leads nowhere is not worth a word.
+// ---------------------------------------------------------------------------
+describe("pointer skills", () => {
+  const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+  const doc = (name: string, extra = "") => skillMd(name).replace(`# ${name}\n`, `# ${name}\n\n${extra}\n`);
+
+  interface Reg { extra?: string; repo?: string | null; status?: number; raw?: string }
+  /** A registry that answers `/api/skills/o/<name>` and its bundle for the skills it is given. */
+  function registry(skills: Record<string, Reg>, more: (r: Req) => Response | undefined = () => undefined) {
+    return fakeFetch((r) => {
+      const o = more(r);
+      if (o) return o;
+      const m = /^\/api\/skills\/o\/([^/?]+)(\/bundle)?/.exec(r.path);
+      const s = m && skills[m[1]!];
+      if (!m || !s) return undefined;
+      if (s.status) return new Response("", { status: s.status });
+      const raw = s.raw ?? doc(m[1]!, s.extra);
+      if (m[2]) return json({ files: [{ path: "SKILL.md", content_base64: b64(raw), storage: "inline" }] });
+      return json({ slug: `o/${m[1]}`, title: m[1], description: "d", type: "single", verified: false, source_repo: s.repo === undefined ? "o/skills" : s.repo, raw_md: raw });
+    });
+  }
+  const POINT = (n: string) => `Call the Skill tool with "${n}".`;
+  const lines = (out: string) => stripAnsi(out).split("\n");
+  const asked = (log: Req[]) => log.filter((r) => /^\/api\/skills\/o\/[^/?]+$/.test(r.path)).map((r) => r.path.split("/").pop());
+
+  it("installs the skill it points at too, with one plain line saying so", async () => {
+    const { f } = registry({ "grill-me": { extra: POINT("grilling") }, grilling: {} });
+    const flags = flagsFor({ agent: ["cursor", "codex"] });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(run.exitCode).toBe(0);
+    expect(existsSync(installed(flags, "grill-me"))).toBe(true);
+    expect(existsSync(installed(flags, "grilling"))).toBe(true);
+    const out = lines(run.output);
+    expect(out.filter((l) => l.startsWith("also installs"))).toEqual(["also installs grilling (used by grill-me)"]);
+    expect(out.at(-1)).toMatch(/^2 installed · 2 agents \(cursor, codex\) · /);
+    expect(run.output).not.toContain("⚠");
+    // The info line carries no colour at all.
+    expect(run.output.split("\n").find((l) => l.includes("also installs"))).toBe("also installs grilling (used by grill-me)");
+  });
+
+  it("says nothing, and still succeeds, when what it points at does not exist", async () => {
+    const { f, log } = registry({ "grill-me": { extra: POINT("grilling") } });
+    const flags = flagsFor({ agent: ["cursor"] });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(run.exitCode).toBe(0);
+    expect(asked(log)).toContain("grilling"); // it was looked for
+    expect(existsSync(installed(flags, "grill-me"))).toBe(true);
+    const out = stripAnsi(run.output);
+    expect(out).not.toMatch(/also installs|grilling|⚠/);
+    expect(out).toMatch(/^✓ grill-me  score \d+/); // the ordinary single-skill block
+  });
+
+  it("says nothing when the lookup itself fails", async () => {
+    const { f } = registry({ "grill-me": { extra: POINT("grilling") }, grilling: { status: 500 } });
+    const flags = flagsFor({ agent: ["cursor"] });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(run.exitCode).toBe(0);
+    expect(stripAnsi(run.output)).not.toMatch(/also installs|grilling|⚠/);
+    expect(existsSync(installed(flags, "grilling"))).toBe(false);
+  });
+
+  it("does not take a skill of the same name from a different source repository", async () => {
+    const { f } = registry({ "grill-me": { extra: POINT("grilling"), repo: "o/skills" }, grilling: { repo: "someone-else/other-repo" } });
+    const flags = flagsFor({ agent: ["cursor"] });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(run.exitCode).toBe(0);
+    expect(existsSync(installed(flags, "grilling"))).toBe(false);
+    expect(stripAnsi(run.output)).not.toMatch(/also installs/);
+  });
+
+  it("takes it when either record has no source repository to compare", async () => {
+    const { f } = registry({ "grill-me": { extra: POINT("grilling"), repo: null }, grilling: { repo: "o/skills" } });
+    const flags = flagsFor({ agent: ["cursor"] });
+    await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(existsSync(installed(flags, "grilling"))).toBe(true);
+  });
+
+  it("ends a cycle and installs each skill once", async () => {
+    const { f, log } = registry({ alpha: { extra: POINT("beta") }, beta: { extra: POINT("alpha") } });
+    const flags = flagsFor({ agent: ["cursor"] });
+    const run = await runAdd("o/alpha", flags, depsFor(flags, f));
+    expect(run.exitCode).toBe(0);
+    expect(run.written).toHaveLength(2);
+    expect(lines(run.output).filter((l) => l.startsWith("also installs"))).toEqual(["also installs beta (used by alpha)"]);
+    expect(asked(log).filter((n) => n === "alpha")).toHaveLength(1); // never fetched again as a pointer
+  });
+
+  it("follows a pointer of a pointer, and stops there", async () => {
+    const { f, log } = registry({
+      alpha: { extra: POINT("beta") }, beta: { extra: POINT("gamma") }, gamma: { extra: POINT("delta") },
+      delta: { extra: POINT("epsilon") }, epsilon: {},
+    });
+    const flags = flagsFor({ agent: ["cursor"] });
+    const run = await runAdd("o/alpha", flags, depsFor(flags, f));
+    expect(run.written.map((w) => w.name).sort()).toEqual(["alpha", "beta", "gamma"]);
+    expect(lines(run.output).filter((l) => l.startsWith("also installs"))).toEqual([
+      "also installs beta (used by alpha)",
+      "also installs gamma (used by beta)",
+    ]);
+    expect(asked(log)).not.toContain("delta");
+    expect(existsSync(installed(flags, "delta"))).toBe(false);
+  });
+
+  it("leaves alone a pointed skill that is already installed, whatever it came from", async () => {
+    const flags = flagsFor({ agent: ["cursor"] });
+    await runAdd("x/grilling", flags, { resolve: async () => [{ name: "grilling", slug: "grilling", raw: skillMd("grilling"), source: "github:x/other" }], fireInstall: () => {} });
+    const { f } = registry({ "grill-me": { extra: POINT("grilling") }, grilling: {} });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(run.exitCode).toBe(0);
+    expect(run.blocked).toEqual([]);
+    expect(stripAnsi(run.output)).not.toMatch(/also installs/);
+    expect(readFileSync(installed(flags, "grilling"), "utf8")).toContain("name: grilling");
+  });
+
+  it("gives a pointed skill that fails its checks the ordinary blocked record, and nothing extra", async () => {
+    const { f } = registry({ "grill-me": { extra: POINT("grilling") }, grilling: { raw: "---\nname: grilling\n---\nno description" } });
+    const flags = flagsFor({ agent: ["cursor"] });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(run.blocked).toHaveLength(1);
+    expect(run.blocked[0]!.name).toBe("grilling");
+    expect(existsSync(installed(flags, "grill-me"))).toBe(true);
+    expect(stripAnsi(run.output)).not.toMatch(/also installs/);
+  });
+
+  it("does not go looking for pointers when only listing", async () => {
+    const { f, log } = registry({ "grill-me": { extra: POINT("grilling") }, grilling: {} });
+    const flags = flagsFor({ list: true });
+    const run = await runAdd("o/grill-me", flags, depsFor(flags, f));
+    expect(stripAnsi(run.output)).toContain("grill-me");
+    expect(asked(log)).not.toContain("grilling");
+  });
+
+  it("adds the pointed skill to --json's installed list, and names it in alsoInstalled", async () => {
+    const { f } = registry({ "grill-me": { extra: POINT("grilling") }, grilling: {} });
+    const flags = flagsFor({ agent: ["cursor"], json: true });
+    const doc = JSON.parse((await runAdd("o/grill-me", flags, depsFor(flags, f))).output);
+    expect(Object.keys(doc)).toEqual(["ok", "scope", "installed", "blocked", "warnings", "alsoInstalled"]);
+    expect(doc.installed.map((i: { name: string }) => i.name)).toEqual(["grill-me", "grilling"]);
+    expect(doc.alsoInstalled).toEqual([{ name: "grilling", usedBy: "grill-me" }]);
+  });
+
+  it("leaves --json exactly as it was when nothing is pointed at", async () => {
+    const { f } = registry({ plain: {} });
+    const flags = flagsFor({ agent: ["cursor"], json: true });
+    const doc = JSON.parse((await runAdd("o/plain", flags, depsFor(flags, f))).output);
+    expect(Object.keys(doc)).toEqual(["ok", "scope", "installed", "blocked", "warnings"]);
+  });
+
+  describe("inside a plugin", () => {
+    const members: MemberSpec[] = [{ name: "grill-me" }, { name: "grilling" }, { name: "other", files: [{ path: "gap.md", body: "G", inZip: false }] }, { name: "more" }];
+    // grill-me's SKILL.md points at grilling.
+    const zip = () => {
+      const entries: Record<string, Uint8Array> = {};
+      for (const m of members) {
+        entries[`${m.name}/SKILL.md`] = strToU8(m.name === "grill-me" ? doc("grill-me", POINT("grilling")) : skillMd(m.name));
+        for (const f of m.files ?? []) if (f.inZip !== false) entries[`${m.name}/${f.path}`] = strToU8(f.body);
+      }
+      return zipSync(entries);
+    };
+    const pluginRegistry = () => fakeFetch((r) => {
+      if (r.path.endsWith("/manifest")) return json(manifestFor(members));
+      if (r.path.endsWith("/download")) return new Response(zip(), { status: 200 });
+      if (r.path.includes("/files/")) return new Response("G", { status: 200 });
+    });
+
+    it("does not say 'also installs' for a member that is already part of the run", async () => {
+      const { f } = pluginRegistry();
+      const flags = flagsFor({ agent: ["cursor"] });
+      const run = await runAdd("plugin:o/p", flags, depsFor(flags, f));
+      expect(run.written).toHaveLength(4);
+      expect(stripAnsi(run.output)).not.toMatch(/also installs/);
+      expect(run.written.filter((w) => w.name === "grilling")).toHaveLength(1); // once
+    });
+
+    it("pulls in the member a selected skill points at, and fetches nothing for the rest", async () => {
+      const { f, log } = pluginRegistry();
+      const flags = flagsFor({ agent: ["cursor"], skill: ["grill-me"] });
+      const run = await runAdd("plugin:o/p", flags, depsFor(flags, f));
+      expect(run.exitCode).toBe(0);
+      expect(run.written.map((w) => w.name).sort()).toEqual(["grill-me", "grilling"]);
+      expect(lines(run.output).filter((l) => l.startsWith("also installs"))).toEqual(["also installs grilling (used by grill-me)"]);
+      expect(existsSync(installed(flags, "other"))).toBe(false);
+      // `other` has a companion the archive lacks: not selected, so not asked for.
+      expect(log.some((r) => r.path.includes("/files/"))).toBe(false);
+    });
+
+    it("looks to the same owner in the registry for a pointer that is not a member", async () => {
+      const lone: MemberSpec[] = [{ name: "grill-me" }];
+      const reg = fakeFetch((r) => {
+        if (r.path.endsWith("/manifest")) return json(manifestFor(lone));
+        if (r.path.endsWith("/download")) return new Response(zipSync({ "grill-me/SKILL.md": strToU8(doc("grill-me", POINT("grilling"))) }), { status: 200 });
+        const m = /^\/api\/skills\/o\/grilling(\/bundle)?/.exec(r.path);
+        if (m && m[1]) return json({ files: [{ path: "SKILL.md", content_base64: b64(skillMd("grilling")), storage: "inline" }] });
+        if (m) return json({ slug: "o/grilling", title: "grilling", description: "d", type: "single", verified: false, raw_md: skillMd("grilling") });
+      });
+      const flags = flagsFor({ agent: ["cursor"], skill: ["grill-me"] });
+      const run = await runAdd("plugin:o/p", flags, depsFor(flags, reg.f));
+      expect(run.written.map((w) => w.name).sort()).toEqual(["grill-me", "grilling"]);
+      expect(lines(run.output)).toContain("also installs grilling (used by grill-me)");
+    });
+  });
+});
+
+describe("--skill and --list on a plugin", () => {
+  const members: MemberSpec[] = [
+    { name: "alpha", files: [{ path: "gap.md", body: "G", inZip: false }] },
+    { name: "beta" },
+  ];
+  const reg = () => fakeFetch((r) => {
+    if (r.path.endsWith("/manifest")) return json(manifestFor(members));
+    if (r.path.endsWith("/download")) return new Response(zipFor(members), { status: 200 });
+    if (r.path.includes("/files/")) return new Response("G", { status: 200 });
+  });
+
+  it("--list names every member and fetches no companion", async () => {
+    const { f, log } = reg();
+    const flags = flagsFor({ list: true });
+    const run = await runAdd("plugin:o/p", flags, depsFor(flags, f));
+    expect(stripAnsi(run.output)).toMatch(/alpha[\s\S]*beta/);
+    expect(log.some((r) => r.path.includes("/files/"))).toBe(false);
+  });
+
+  it("--skill that names nothing in the plugin installs nothing, and says exit 1", async () => {
+    const { f } = reg();
+    const flags = flagsFor({ skill: ["nope"] });
+    const run = await runAdd("plugin:o/p", flags, depsFor(flags, f));
+    expect(run.written).toEqual([]);
+    expect(run.exitCode).toBe(1);
+  });
+
+  it("--skill fetches only the companions of the member it names", async () => {
+    const { f, log } = reg();
+    const flags = flagsFor({ skill: ["beta"] });
+    const run = await runAdd("plugin:o/p", flags, depsFor(flags, f));
+    expect(run.written.map((w) => w.name)).toEqual(["beta"]);
+    expect(log.some((r) => r.path.includes("/files/"))).toBe(false);
+  });
+});
+
+describe("a pointer in a source that is already all there", () => {
+  const withBody = (name: string, extra: string) => skillMd(name).replace(`# ${name}\n`, `# ${name}\n\n${extra}\n`);
+  it("pulls a sibling in when one skill is picked out of a repo", async () => {
+    const pool = [
+      { name: "grill-me", slug: "grill-me", raw: withBody("grill-me", 'Call the Skill tool with "grilling".'), source: "github:o/skills" },
+      { name: "grilling", slug: "grilling", raw: skillMd("grilling"), source: "github:o/skills" },
+      { name: "unrelated", slug: "unrelated", raw: skillMd("unrelated"), source: "github:o/skills" },
+    ];
+    const flags = flagsFor({ agent: ["cursor"], skill: ["grill-me"] });
+    const run = await runAdd("o/skills", flags, { resolve: async () => pool, fireInstall: () => {} });
+    expect(run.written.map((w) => w.name).sort()).toEqual(["grill-me", "grilling"]);
+    expect(stripAnsi(run.output)).toContain("also installs grilling (used by grill-me)");
+    expect(existsSync(installed(flags, "unrelated"))).toBe(false);
+  });
+});
