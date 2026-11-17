@@ -85,14 +85,29 @@ describe("retryingFetch", () => {
     expect(h.waits).toEqual([1000, 2000, 4000]);
   });
 
-  it("stops after 4 attempts in total and hands back the last 5xx answer", async () => {
+  it("stops after 4 attempts in total and fails a 5xx exactly as it fails a 429", async () => {
     const { f, calls } = scripted([res(503, {}, "down")]);
     const h = harness();
-    const r = await retryingFetch(f, h.opts)("https://api.x/a");
+    const err = await retryingFetch(f, h.opts)("https://api.x/a").catch((e) => e);
     expect(calls).toHaveLength(4);
-    expect(r.status).toBe(503);
-    expect(await r.text()).toBe("down"); // the caller can still read what the server said
     expect(h.waits).toEqual([1000, 2000, 4000]);
+    expect(err).toBeInstanceOf(RegistryError);
+    expect(err.status).toBe(503);
+    expect(err.retryAfterSec).toBeUndefined();
+    expect(err.message).toBe("the SkillMD API is temporarily unavailable (HTTP 503), try again shortly");
+  });
+
+  // The API answers {"error":"temporarily_unavailable"} when D1 is busy. That
+  // used to end a plugin install as a permanent SKILL.md-only copy of a pack.
+  it("rides out a busy-D1 503 and returns the answer that follows", async () => {
+    const busy = (headers: Record<string, string> = {}) => res(503, { "content-type": "application/json", ...headers }, JSON.stringify({ error: "temporarily_unavailable" }));
+    const { f, calls } = scripted([busy(), busy({ "retry-after": "2" }), res(200, {}, "ok")]);
+    const h = harness();
+    const r = await retryingFetch(f, h.opts)("https://api.x/a");
+    expect(r.status).toBe(200);
+    expect(await r.text()).toBe("ok");
+    expect(calls).toHaveLength(3);
+    expect(h.waits).toEqual([1000, 2000]); // no header: backoff; then the header's 2 s
   });
 
   it("fails a 429 that never lets up, naming the wait it asked for", async () => {
@@ -194,7 +209,7 @@ describe("retryingFetch", () => {
 
   it("honours a different retry count", async () => {
     const { f, calls } = scripted([res(503)]);
-    await retryingFetch(f, { ...harness().opts, retries: 1 })("https://api.x/a");
+    await retryingFetch(f, { ...harness().opts, retries: 1 })("https://api.x/a").catch(() => {});
     expect(calls).toHaveLength(2);
   });
 });

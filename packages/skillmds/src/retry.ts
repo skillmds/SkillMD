@@ -49,7 +49,7 @@ function throttled(status: number, askedMs: number | null): RegistryError {
   const when = sec === undefined ? "shortly" : `in ${sec} s`;
   const message = status === 429
     ? `rate limited by the SkillMD API, try again ${when}`
-    : `the SkillMD API is unavailable (HTTP ${status}), try again ${when}`;
+    : `the SkillMD API is temporarily unavailable (HTTP ${status}), try again ${when}`;
   return new RegistryError(message, status, sec);
 }
 
@@ -66,13 +66,12 @@ function discard(res: Response): void {
  * waits and tries again, up to `retries` more times; the wait is the server's
  * Retry-After, else 1 s, 2 s, 4 s, and never more than the cap.
  *
- * It gives up in two ways, so a caller can always tell why:
- *  - a 429 that outlasts the retries, or any retryable answer whose Retry-After
- *    is longer than the cap, throws a RegistryError that carries the status and
- *    the wait the server asked for ("rate limited …, try again in 37 s");
- *  - a 502/503/504 that outlasts the retries comes back as that response, and
- *    a network error is rethrown as it was.
- * A request the caller cancelled itself is never retried.
+ * A 503 (the API's "temporarily_unavailable", D1 busy) is a 429 in every way
+ * that matters here. When it gives up, because the retries ran out or because
+ * the server asked for longer than the cap, it throws a RegistryError that
+ * carries the status and the wait the server asked for ("rate limited …, try
+ * again in 37 s"). A network error is rethrown as it was. A request the caller
+ * cancelled itself is never retried.
  */
 export function retryingFetch(inner: typeof fetch, opts: RetryOptions = {}): typeof fetch {
   const retries = opts.retries ?? MAX_RETRIES;
@@ -95,12 +94,7 @@ export function retryingFetch(inner: typeof fetch, opts: RetryOptions = {}): typ
       if (!RETRY_STATUSES.has(res.status)) return res;
 
       const asked = retryAfterMs(res.headers.get("retry-after"), now());
-      if (asked !== null && asked > cap) {
-        discard(res);
-        throw throttled(res.status, asked);
-      }
-      if (attempt >= retries) {
-        if (res.status !== 429) return res;
+      if ((asked !== null && asked > cap) || attempt >= retries) {
         discard(res);
         throw throttled(res.status, asked);
       }
