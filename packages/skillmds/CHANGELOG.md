@@ -2,7 +2,7 @@
 
 All notable changes to `get-skill` (published as `skillmds` until 1.3.6) are documented here. Versions follow [semver](https://semver.org).
 
-## 1.3.14
+## 1.4.0
 
 - **`add plugin:owner/slug` makes two requests instead of dozens.** It asks the registry for the plugin's manifest and its archive together, builds every member's files from them, checks each file's sha256 where the registry holds one, and requests only a companion the archive lacks, from the address the manifest gives for it (six at a time). A 39-skill plugin used to cost 43 requests, 22 of them rate-limited. Only the registry you pointed `--api` at, and the GitHub raw hosts, are ever fetched from; your token goes to the registry alone. A registry with no manifest route (older, or self-hosted) is read the previous way: member list, archive, then one bundle per pack, now four at a time and no faster than four a second.
 - **A busy registry is waited out.** Registry requests on the plugin path retry on 429, 502, 503 and 504 and on network errors, up to three times: they wait the `Retry-After` the server sent (seconds or a date), else 1 s, 2 s, 4 s, and never more than 10 s at once. A server that asks for longer, or that is still busy after the retries, ends the install with the wait it asked for ("rate limited by the SkillMD API, try again in 37 s"). A 404 is never retried.
