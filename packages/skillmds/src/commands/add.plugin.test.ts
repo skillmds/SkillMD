@@ -581,6 +581,8 @@ describe("pointer skills", () => {
     expect(existsSync(installed(flags, "grilling"))).toBe(true);
     const out = lines(run.output);
     expect(out.filter((l) => l.startsWith("also installs"))).toEqual(["also installs grilling (used by grill-me)"]);
+    // The header names what was asked for, not "2 skills, 2 skills".
+    expect(out[0]).toBe("Installing o/grill-me, 2 skills, to 2 agents");
     expect(out.at(-1)).toMatch(/^2 installed · 2 agents \(cursor, codex\) · /);
     expect(run.output).not.toContain("⚠");
     // The info line carries no colour at all.

@@ -1196,7 +1196,9 @@ function runLabel(candidates: AddCandidate[], arg: string, paths: PathCtx): stri
   const plugin = candidates.find((c) => c.plugin)?.plugin?.name;
   if (plugin) return plugin;
   const sources = new Set(candidates.map((c) => c.source ?? (c.registrySlug ? `registry:${c.registrySlug}` : provenanceFor(arg))));
-  if (sources.size !== 1) return `${candidates.length} skills`;
+  // Several sources (a skill and the skill it points at): the header already counts the skills,
+  // so it names what was asked for rather than repeating "N skills".
+  if (sources.size !== 1) return arg;
   const [only] = [...sources];
   if (only!.startsWith("local:")) return `local:${shortPath(only!.slice(6), paths)}`;
   return only!.replace(/^registry:/, "");
