@@ -227,6 +227,28 @@ describe("completeMembers", () => {
       expect(out[0]!.failure).toMatch(/could not fetch (evil|meta)\.md: .*not an address/);
     });
 
+    // Through skillmd.com/api/... the registry once named itself by its internal service host
+    // (https://skillmd-api/...), and a registry may list a file by a relative address instead.
+    // Either way the file is read from the registry this install was pointed at.
+    it("reads a file listed under the internal service host, or by a relative address, from the registry it was pointed at", async () => {
+      const urls: string[] = [];
+      const f = (async (u: string) => { urls.push(String(u)); return new Response("X", { status: 200 }); }) as unknown as typeof fetch;
+      const m = manifestOf([member("a", [
+        file("internal.md", "X", { url: "https://skillmd-api/api/skills/o/a/files/internal.md" }),
+        file("rooted.md", "X", { url: "/api/skills/o/a/files/rooted.md" }),
+        file("bare.md", "X", { url: "api/skills/o/a/files/bare.md" }),
+        file("evil.md", "X", { url: "/steal" }),                                                // a relative address outside /api/
+      ])]);
+      const out = await run(m, { "a/SKILL.md": "# a" }, f);
+      expect(urls).toEqual([
+        `${BASE}/api/skills/o/a/files/internal.md`,
+        `${BASE}/api/skills/o/a/files/rooted.md`,
+        `${BASE}/api/skills/o/a/files/bare.md`,
+        `${BASE}/steal`,
+      ]);
+      expect(out[0]!.failure).toBeUndefined();
+    });
+
     it("sends the token to the registry and to nobody else", async () => {
       const seen: Record<string, string | undefined> = {};
       const f = (async (u: string, init?: RequestInit) => { seen[String(u)] = (init?.headers as Record<string, string> | undefined)?.authorization; return new Response("X", { status: 200 }); }) as unknown as typeof fetch;

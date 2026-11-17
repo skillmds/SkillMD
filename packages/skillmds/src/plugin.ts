@@ -192,7 +192,8 @@ function integrityFailure(path: string, want: string, got: string): string {
  *  it lives. The GitHub raw hosts stay allowed; anything else is refused. */
 function gapUrl(url: string, base: string): string | null {
   let u: URL;
-  try { u = new URL(url); } catch { return null; }
+  // An address without a host is relative to the registry this install was pointed at.
+  try { u = new URL(url); } catch { try { u = new URL(url, base); } catch { return null; } }
   if (isAllowedSourceUrl(url)) return u.href;
   let b: URL;
   try { b = new URL(base); } catch { return null; }
