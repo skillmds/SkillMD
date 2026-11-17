@@ -11,7 +11,7 @@ import { collectFiles, resolvePackFiles, resolveSource, resolveTree } from "../s
 import type { ResolvedSkill, TreeFile } from "../source.js";
 import { looksLikeProject } from "../project.js";
 import { agentDir, agentSupportsGlobal, canonicalDir, detectAgents } from "../agents.js";
-import { installSkill } from "../installer.js";
+import { installSkill, isInstalled } from "../installer.js";
 import { readLock } from "../lock.js";
 import type { InstallResult, InstallTarget, SkillFileInput } from "../installer.js";
 import { parseSource, sourceId } from "../sources.js";
@@ -1010,12 +1010,6 @@ async function resolveCandidates(arg: string, flags: AddFlags, deps: AddDeps): P
   return { selected: pool.filter((c) => c.usedBy || flags.skill!.includes(c.name) || flags.skill!.includes("*")), pool };
 }
 
-/** Where a skill of this name would land in this scope, if something is there. */
-function alreadyThere(name: string, scope: Scope): boolean {
-  const lockScope = { global: Boolean(scope.global), cwd: scope.cwd, home: scope.home };
-  return Boolean(readLock(lockScope).skills[name]) || existsSync(join(canonicalDir(scope), name));
-}
-
 /** Everything that ends a run before a single byte is written. Returns the
  *  finished result, or null to carry on with the install. */
 function gate(flags: AddFlags, deps: AddDeps, candidates: AddCandidate[]): AddResult | null {
@@ -1337,7 +1331,7 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
   // A skill that was only pulled in, and is already installed, has done its job:
   // replacing it, or refusing to over a different source, would be failing the
   // install over a pointer.
-  candidates = candidates.filter((c) => !(c.usedBy && alreadyThere(c.name, scope)));
+  candidates = candidates.filter((c) => !(c.usedBy && isInstalled(c.name, scope)));
   for (const c of candidates) records.push(await installOne(c, ctx));
   const elapsedMs = resolveMs + (now() - installStart);
 

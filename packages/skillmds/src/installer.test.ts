@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, lstatSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { installSkill, uninstallSkill, digestOf, listInstalled, defaultLink } from "./installer.js";
+import { installSkill, uninstallSkill, digestOf, listInstalled, defaultLink, isInstalled } from "./installer.js";
 import { readLock } from "./lock.js";
 
 const tmps: string[] = [];
@@ -270,5 +270,23 @@ describe("listInstalled", () => {
       writeFileSync(join(home, ".claude", "skills", n, "SKILL.md"), "x");
     }
     expect(listInstalled({ global: true, home }).map((s) => s.name)).toEqual(["alpha", "mid", "zeta"]);
+  });
+});
+
+describe("isInstalled", () => {
+  it("is true for a tracked skill, true for an untracked directory, false for neither", async () => {
+    const cwd = tmp();
+    const scope = { global: false, cwd };
+    expect(isInstalled("demo", scope)).toBe(false);
+    await installSkill({ name: "demo", files, source: "registry:o/demo", scope, agents: ["codex"], explicitAgents: true });
+    expect(isInstalled("demo", scope)).toBe(true);
+    mkdirSync(join(cwd, ".agents", "skills", "by-hand"), { recursive: true });
+    expect(isInstalled("by-hand", scope)).toBe(true);
+    expect(isInstalled("other", scope)).toBe(false);
+  });
+  it("looks in the scope it was asked about", async () => {
+    const cwd = tmp(); const home = tmp();
+    await installSkill({ name: "demo", files, source: "registry:o/demo", scope: { global: false, cwd, home }, agents: ["codex"], explicitAgents: true });
+    expect(isInstalled("demo", { global: true, cwd, home })).toBe(false);
   });
 });

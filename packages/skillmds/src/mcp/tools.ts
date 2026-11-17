@@ -99,7 +99,7 @@ export const TOOLS: ReadonlyArray<ToolDefinition> = [
     name: "skillmd_install",
     title: "Install skill",
     description:
-      "Install a skill by owner/name slug: validates it, then writes one canonical copy (.agents/skills/<name>) and links it into the chosen agents' skill directories. Never executes scripts. The response reports the skill's capability flags (docs_only, network_calls, executes_scripts, reads_secrets) as information.",
+      "Install a skill by owner/name slug: validates it, then writes one canonical copy (.agents/skills/<name>) and links it into the chosen agents' skill directories. Never executes scripts. Skills it depends on (it calls them with the Skill tool or by name) are installed with it, from the same owner, and reported as also_installed; the ones it merely points at are reported as related. The response reports the skill's capability flags (docs_only, network_calls, executes_scripts, reads_secrets) as information.",
     inputSchema: {
       type: "object",
       properties: {
@@ -118,6 +118,11 @@ export const TOOLS: ReadonlyArray<ToolDefinition> = [
         mode: { type: "string", enum: ["link", "copy"], description: "link (junction/symlink to the canonical copy, default) or copy" },
         force: { type: "boolean", description: "Replace a skill installed from a different source or an untracked directory" },
         deny: { type: "array", items: { type: "string" }, description: "Refuse the skill if it carries any of these security flags" },
+        with_related: {
+          type: "boolean",
+          description:
+            "Also install the skills this skill only points at (see, link). Skills it calls (the Skill tool, 'use the X skill') are always installed with it and reported as also_installed.",
+        },
         dest: {
           type: "string",
           description: "Deprecated: an explicit agent skills directory. Must be a known agent skills dir; prefer scope + agents.",

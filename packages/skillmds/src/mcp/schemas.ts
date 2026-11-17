@@ -100,6 +100,40 @@ export const INSTALL_RESULT = {
     files_written: { type: "integer", description: "Number of files written" },
     security_flags: { type: "array", items: { type: "string" }, description: "Capability flags reported for the skill" },
     note: { type: "string", description: "Caveats, e.g. when only SKILL.md could be written" },
+    also_installed: {
+      type: "array",
+      description: "Skills this skill depends on (it calls them with the Skill tool or by name), installed alongside it; absent when there were none",
+      items: {
+        type: "object",
+        properties: {
+          slug: { type: "string", description: "owner/name of the dependency" },
+          used_by: { type: "string", description: "owner/name of the skill that needs it" },
+        },
+        required: ["slug", "used_by"],
+      },
+    },
+    related: {
+      type: "array",
+      description: "Skills the skill only points at (see, link), not installed; pass with_related to install them. Absent when there were none",
+      items: {
+        type: "object",
+        properties: {
+          slug: { type: "string", description: "owner/name of the related skill" },
+          kind: { type: "string", description: "How the skill points at it: see, link, or a call that hangs off one of those" },
+          via: { type: "string", description: "owner/name of the skill that points at it" },
+        },
+        required: ["slug", "kind", "via"],
+      },
+    },
+    also_blocked: {
+      type: "array",
+      description: "Dependencies that were not installed because they failed a check; the skill itself was installed. Absent when there were none",
+      items: {
+        type: "object",
+        properties: { slug: { type: "string" }, reason: { type: "string" } },
+        required: ["slug", "reason"],
+      },
+    },
   },
   required: ["installed", "slug", "scope", "canonical", "targets", "files_written"],
 } as const;

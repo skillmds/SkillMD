@@ -24,7 +24,9 @@ const VERSION = (() => {
 export function buildContext(): ToolContext {
   try {
     // SKILLMD_API / SKILLMD_TOKEN / ~/.skillmd/config.json, https enforced.
-    const c = createClient({});
+    // Retrying, so a busy registry is waited out (see retry.ts) instead of
+    // turning into a failed tool call or a skipped dependency.
+    const c = createClient({}, { retry: {} });
     return { api: c.api, hasToken: c.hasToken, base: c.base, token: c.token, cwd: process.cwd(), home: undefined, env: process.env };
   } catch (e) {
     // createClient() throws on a bad SKILLMD_API (an http:// base, a malformed

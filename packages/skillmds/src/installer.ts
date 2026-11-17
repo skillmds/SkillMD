@@ -237,6 +237,13 @@ export async function installSkill(req: InstallRequest): Promise<InstallResult> 
   return { canonical, targets, skipped, replaced, digest };
 }
 
+/** Is something already installed under this name in this scope: a lock entry,
+ *  or a directory at the canonical path (tracked or not)? */
+export function isInstalled(name: string, scope: ScopeOptions): boolean {
+  const lockScope = { global: Boolean(scope.global), cwd: scope.cwd, home: scope.home };
+  return Boolean(readLock(lockScope).skills[name]) || existsSync(join(canonicalDir(scope), name));
+}
+
 export interface UninstallResult { removed: string[]; untracked: boolean }
 
 /** Remove a skill from every agent dir in scope plus the canonical copy and lock entry.
