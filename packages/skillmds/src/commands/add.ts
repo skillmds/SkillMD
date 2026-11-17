@@ -19,6 +19,11 @@ import { claudeCliAvailable, installClaudePlugin, installPluginNatively, MARKETP
 import { detectHostAgent, isInteractive, nonInteractiveHint, realTerminal } from "../env.js";
 import type { Terminal } from "../env.js";
 import { readConfig, writeConfig, telemetryDisabled } from "../config.js";
+import type { ResolveSources } from "../config.js";
+import { createPacer, describeFailure } from "../retry.js";
+import type { RetryOptions } from "../retry.js";
+import { completeMembers, fetchPackManifest, fetchPackZip, openPluginArchive } from "../plugin.js";
+import type { CompletedMember } from "../plugin.js";
 import { safeText } from "../sanitize.js";
 import { GLYPH, banner, renderInstallSummary, stripAnsi } from "../ui.js";
 import type { PathCtx } from "../ui.js";
@@ -79,6 +84,18 @@ export interface AddCandidate {
   pinMiss?: boolean;
   /** Non-fatal caveat about how this candidate was resolved, shown as a ⚠ line. */
   note?: string;
+  /** Remarks that belong in --json's warnings and nowhere on the terminal: how a
+   *  plugin was assembled, files the registry holds no checksum for. */
+  quietNotes?: string[];
+  /** Why this candidate cannot be installed: its files could not all be had. It
+   *  becomes a blocked skill carrying this reason, never a partial install. */
+  unavailable?: string;
+  /** A pack whose companion files could not be had on a route that has no
+   *  stricter answer (a bare `owner/name` the registry could not serve whole):
+   *  installed from its SKILL.md alone, and said so. */
+  companionsMissing?: boolean;
+  /** The plugin this came out of. */
+  plugin?: { name: string; missing: string[] };
 }
 
 export interface AddDeps {
@@ -109,11 +126,14 @@ export interface AddDeps {
 // the human renderer draws it at all. The "replaced" remark is a warning like
 // any other in --json's warnings[], but the install summary already prints that
 // line under the skill, so the human path skips the duplicate.
-interface Notice { text: string; style: "info" | "warn" | "skip"; suppressInSummary?: boolean }
+// `jsonOnly` keeps an internal detail out of the terminal altogether: it is
+// still one of --json's warnings.
+interface Notice { text: string; style: "info" | "warn" | "skip"; suppressInSummary?: boolean; jsonOnly?: boolean }
 const infoNotice = (text: string): Notice => ({ text, style: "info" });
 const warnNotice = (text: string): Notice => ({ text, style: "warn" });
 const skipNotice = (text: string): Notice => ({ text, style: "skip" });
 const replacedNotice = (text: string): Notice => ({ text, style: "warn", suppressInSummary: true });
+const quietNotice = (text: string): Notice => ({ text, style: "warn", jsonOnly: true });
 
 function noticeLine(n: Notice): string {
   switch (n.style) {
@@ -168,11 +188,15 @@ export function unverifiedFilesNote(n: number): string {
   return `${n} companion ${f} came straight from the source repo — the registry holds no checksum for ${it}, so only the connection was verified`;
 }
 
-/** What to tell the user about a bundle: unverified links, files gone upstream. */
-function bundleNote(bundle: { unverified?: boolean }[], missing: string[]): string | undefined {
+/** What a bundle has to say. Files gone upstream are a caveat the user should
+ *  see (the skill may still refer to them). Links with no checksum on record are
+ *  an internal detail of how the bytes were verified: it goes to --json only. */
+function bundleNotes(bundle: { unverified?: boolean }[], missing: string[]): { note?: string; quiet: string[] } {
   const unverified = bundle.filter((file) => file.unverified).length;
-  const notes = [unverified ? unverifiedFilesNote(unverified) : "", missing.length ? missingFilesNote(missing) : ""].filter(Boolean);
-  return notes.length ? notes.join("; ") : undefined;
+  return {
+    ...(missing.length ? { note: missingFilesNote(missing) } : {}),
+    quiet: unverified ? [unverifiedFilesNote(unverified)] : [],
+  };
 }
 
 
@@ -322,13 +346,14 @@ async function candidateFromRecord(
   }
   if (bundle && bundle.length) {
     const sk = bundle.find((file) => file.path === "SKILL.md");
-    const note = bundleNote(bundle, missing);
+    const { note, quiet } = bundleNotes(bundle, missing);
     return {
       ...meta,
       type: bundle.length > 1 ? "pack" : meta.type,
       raw: sk ? sk.contents.toString("utf8") : skillMdFor(skill),
       files: bundle,
       ...(note ? { note } : {}),
+      ...(quiet.length ? { quietNotes: quiet } : {}),
     };
   }
   // The registry's copy is unavailable: a pack falls back to a live GitHub fetch.
@@ -336,7 +361,7 @@ async function candidateFromRecord(
     const pack = await resolvePackFiles(skill, opts.fetchTree);
     if (pack) return { ...meta, ...pack };
   }
-  return { ...meta, raw: skillMdFor(skill) };
+  return { ...meta, raw: skillMdFor(skill), ...(skill.type === "pack" ? { companionsMissing: true } : {}) };
 }
 
 /** The outside world a bare `owner/name` is resolved against. Injected so the
@@ -450,13 +475,13 @@ export async function fetchPackArchive(
   token: string | undefined,
   doFetch: typeof fetch = fetch,
 ): Promise<Map<string, string>> {
-  const headers: Record<string, string> = { accept: "application/zip" };
-  if (token) headers.authorization = `Bearer ${token}`;
-  const res = await doFetch(`${base}/api/packs/${owner}/${slug}/download`, { headers });
-  if (!res.ok) throw new RegistryError(`SkillMD API ${res.status} on /api/packs/${owner}/${slug}/download`, res.status);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  return skillMdsFromZip(await fetchPackZip(base, owner, slug, token, doFetch));
+}
+
+/** The `<dir>/SKILL.md` of every directory in a plugin archive, by directory. */
+async function skillMdsFromZip(bytes: Uint8Array): Promise<Map<string, string>> {
   const { unzipSync, strFromU8 } = await import("fflate");
-  const entries = unzipSync(bytes);
+  const entries = unzipSync(bytes, { filter: (e) => /^.+\/SKILL\.md$/.test(e.name) });
   const out = new Map<string, string>();
   for (const [path, data] of Object.entries(entries)) {
     const m = /^(.+)\/SKILL\.md$/.exec(path);
@@ -473,14 +498,176 @@ interface PackResponse {
   items?: { slug?: unknown; type?: "single" | "pack"; verified?: unknown }[];
 }
 
+/** What a run reaches the registry with. The defaults are the real network, the
+ *  real clock and the real config; tests inject all three. */
+export interface NetOverrides {
+  fetch?: typeof fetch;
+  /** How a busy registry is waited out (see retry.ts). */
+  retry?: RetryOptions;
+  /** Where the API base and token come from, instead of the real env and config. */
+  sources?: ResolveSources;
+}
+
+/** One request every 250 ms: about four a second, under the API's per-IP ceiling. */
+const PACE_MS = 250;
+/** Bundles fetched at once on the member-by-member route. */
+const BUNDLE_WORKERS = 4;
+/** Install-count pings in flight at once. They are best-effort: never retried. */
+const MAX_PINGS = 4;
+const PING_TIMEOUT_MS = 5_000;
+
+type PluginSpec = Extract<SourceSpec, { kind: "plugin" }>;
+
+/** What the header of a plugin install says, kept for --json's warnings. */
+function pluginNote(n: number, name: string, missing: number): string {
+  return `${n} skill${n === 1 ? "" : "s"} from the ${name} plugin`
+    + (missing ? ` (${missing} member${missing === 1 ? "" : "s"} were not in the archive)` : "");
+}
+
+/** Why a bundle could not be had, as the one line a blocked skill carries. */
+function bundleFailure(e: unknown): string {
+  if (e instanceof IntegrityError) return e.message;
+  const msg = e instanceof Error ? e.message : String(e);
+  // A companion that failed already says which one and why.
+  return /^could not fetch /.test(msg) ? msg : `could not fetch its files: ${describeFailure(e)}`;
+}
+
+/**
+ * A registry plugin's members as candidates.
+ *
+ * Two requests (the plugin's manifest and its archive, asked for together) give
+ * every member's full file set; see plugin.ts. A registry with no manifest route
+ * is read the older way: member list, the same archive, then one bundle per
+ * pack, paced and retried. Either way a member whose files could not all be had
+ * comes back `unavailable`, with the reason, instead of as a SKILL.md-only copy.
+ */
+export async function resolvePlugin(spec: PluginSpec, source: string, flags: AddFlags, net: NetOverrides = {}): Promise<AddCandidate[]> {
+  const retry = net.retry ?? {};
+  const client = createClient(flags, { fetch: net.fetch, sources: net.sources, retry });
+  const { base, token } = client;
+  // Independent of each other, so asked for together. allSettled so that the
+  // one we turn out not to need can never become an unhandled rejection.
+  const [manifest, zip] = await Promise.allSettled([
+    fetchPackManifest(client.fetch, base, spec.owner, spec.slug, token),
+    fetchPackZip(base, spec.owner, spec.slug, token, client.fetch),
+  ]);
+  if (manifest.status === "rejected") throw manifest.reason;
+  if (manifest.value) {
+    if (zip.status === "rejected") throw zip.reason;
+    return candidatesFromManifest(spec, source, manifest.value, zip.value, flags, client);
+  }
+  return candidatesFromListing(spec, source, zip, flags, client, net);
+}
+
+async function candidatesFromManifest(
+  spec: PluginSpec,
+  source: string,
+  manifest: Awaited<ReturnType<typeof fetchPackManifest>> & object,
+  zip: Uint8Array,
+  flags: AddFlags,
+  client: Client,
+): Promise<AddCandidate[]> {
+  if (!manifest.members.length) throw new Error(`plugin ${spec.owner}/${spec.slug} has no installable skills`);
+  const archive = await openPluginArchive(manifest, zip);
+  if (!archive.members.length) throw new Error(`plugin ${spec.owner}/${spec.slug} returned no readable skills`);
+  // --list reads only each SKILL.md: no companion is worth a request for that.
+  const completed: CompletedMember[] = flags.list
+    ? archive.members.map((member) => ({ member, unverified: 0 }))
+    : await completeMembers(archive, archive.members, { fetch: client.fetch, base: client.base, token: client.token });
+  const plugin = { name: archive.name, missing: archive.missing };
+  const out: AddCandidate[] = completed.map((c) => ({
+    name: c.member.dir, slug: c.member.dir, registrySlug: c.member.slug, source,
+    raw: c.member.raw, verified: c.member.verified, type: c.member.type,
+    // A member with no companions is just its SKILL.md; nothing to list.
+    ...(c.files && c.files.length > 1 ? { files: c.files } : {}),
+    ...(c.failure ? { unavailable: c.failure } : {}),
+    ...(c.unverified ? { quietNotes: [unverifiedFilesNote(c.unverified)] } : {}),
+    plugin,
+  }));
+  out[0]!.quietNotes = [...(out[0]!.quietNotes ?? []), pluginNote(out.length, archive.name, archive.missing.length)];
+  return out;
+}
+
+/** The route for a registry that has no manifest: the member list, the archive
+ *  already asked for, and a bundle for each member that is a pack. */
+async function candidatesFromListing(
+  spec: PluginSpec,
+  source: string,
+  zip: PromiseSettledResult<Uint8Array>,
+  flags: AddFlags,
+  client: Client,
+  net: NetOverrides,
+): Promise<AddCandidate[]> {
+  const { name: packName, members } = await fetchPackMembers(client.api, spec.owner, spec.slug);
+  if (!members.length) throw new Error(`plugin ${spec.owner}/${spec.slug} has no installable skills`);
+  if (zip.status === "rejected") throw zip.reason;
+  const archive = await skillMdsFromZip(zip.value);
+  const dirs = packDirNames(members.map((m) => m.slug));
+  const plugin = { name: packName, missing: [] as string[] };
+  const out: AddCandidate[] = [];
+  members.forEach((m, i) => {
+    const raw = archive.get(dirs[i]!);
+    if (!raw) { plugin.missing.push(m.slug); return; }
+    // The archive's directory, not the bare skill name: two owners can
+    // contribute the same name, and using the bare one silently installs
+    // the second over the first (observed: a 31-member plugin landing 30).
+    const name = dirs[i]!;
+    out.push({ name, slug: name, registrySlug: m.slug, source, raw, verified: m.verified, type: m.type, plugin });
+  });
+  if (!out.length) throw new Error(`plugin ${spec.owner}/${spec.slug} returned no readable skills`);
+
+  // The archive carries one SKILL.md per member, so a pack arrives without its
+  // companions and needs its bundle. A plugin's whole membership can be packs,
+  // so the requests are paced below the API's ceiling and ridden out, and a
+  // pack whose bundle will not come is blocked rather than installed bare.
+  const multi = flags.list ? [] : out.filter((c) => c.type === "pack");
+  if (multi.length) {
+    const raw = net.fetch ?? fetch;
+    const pace = createPacer(PACE_MS, { now: net.retry?.now, sleep: net.retry?.sleep });
+    const paced: typeof fetch = async (input, init) => {
+      if (String(input).startsWith(client.base)) await pace();
+      return raw(input, init);
+    };
+    let n = 0;
+    await Promise.all(Array.from({ length: Math.min(BUNDLE_WORKERS, multi.length) }, async () => {
+      for (let i = n++; i < multi.length; i = n++) {
+        const c = multi[i]!;
+        try {
+          const missing: string[] = [];
+          const bundle = await fetchBundle(client.base, c.registrySlug!, client.token, { fetch: paced, retry: net.retry ?? {}, strict: true, missing });
+          // A bundle that lists nothing besides SKILL.md is a pack with no
+          // companions: that is an answer, not a failure.
+          if (!bundle?.length) continue;
+          const sk = bundle.find((file) => file.path === "SKILL.md");
+          const { note, quiet } = bundleNotes(bundle, missing);
+          c.files = bundle;
+          if (sk) c.raw = sk.contents.toString("utf8");
+          if (note) c.note = note;
+          if (quiet.length) c.quietNotes = quiet;
+        } catch (e) {
+          c.unavailable = bundleFailure(e);
+        }
+      }
+    }));
+  }
+  out[0]!.quietNotes = [...(out[0]!.quietNotes ?? []), pluginNote(out.length, packName, plugin.missing.length)];
+  return out;
+}
+
 /** The real deps. Built per run, because whether a prompt may be opened is a
  *  property of *this* invocation's flags (-y, --json, host agent, TTY). */
-function makeDefaultDeps(flags: AddFlags): AddDeps {
+export function makeDefaultDeps(flags: AddFlags, net: NetOverrides = {}): AddDeps {
   const canPrompt = (): boolean => isInteractive(flags, {
     stdinTTY: Boolean(process.stdin.isTTY),
     stdoutTTY: Boolean(process.stdout.isTTY),
     env: flags.env ?? process.env,
   });
+  // A plugin installs one ping per skill. They are told apart from the install
+  // itself by never being waited for, and from each other by never more than
+  // MAX_PINGS being in flight, so a 39-skill plugin does not end in a 39-request burst.
+  let pingApi: Client["api"] | undefined;
+  let pingsActive = 0;
+  const pingQueue: (() => void)[] = [];
   return {
     async resolve(arg, f) {
       const spec = parseSource(arg, { ref: f.ref });
@@ -488,58 +675,7 @@ function makeDefaultDeps(flags: AddFlags): AddDeps {
       // A plugin expands to its members. Each becomes an ordinary candidate, so
       // scope, agent targeting, linting and the lock file all behave exactly as
       // they do for a single skill — this returns many rather than one.
-      if (spec.kind === "plugin") {
-        const { api, base: apiBase, token, fetch: doFetch } = createClient(f);
-        const { name: packName, members } = await fetchPackMembers(api, spec.owner, spec.slug);
-        if (!members.length) throw new Error(`plugin ${spec.owner}/${spec.slug} has no installable skills`);
-        const archive = await fetchPackArchive(apiBase, spec.owner, spec.slug, token, doFetch);
-        const dirs = packDirNames(members.map((m) => m.slug));
-        const out: AddCandidate[] = [];
-        const missing: string[] = [];
-        members.forEach((m, i) => {
-          const raw = archive.get(dirs[i]!);
-          if (!raw) { missing.push(m.slug); return; }
-          // The archive's directory, not the bare skill name: two owners can
-          // contribute the same name, and using the bare one silently installs
-          // the second over the first (observed: a 31-member plugin landing 30).
-          const name = dirs[i]!;
-          out.push({
-            name, slug: name, registrySlug: m.slug, source,
-            raw, verified: m.verified, type: m.type,
-          });
-        });
-        // The archive carries one SKILL.md per member, so multi-file members
-        // arrive without their companions. Those are the minority (3 of 30 in
-        // the plugin this was built against), so fetching just their bundles
-        // completes them without going back to one request per member.
-        const multi = out.filter((c) => c.type === "pack");
-        if (multi.length) {
-          let n = 0;
-          await Promise.all(Array.from({ length: Math.min(4, multi.length) }, async () => {
-            for (let i = n++; i < multi.length; i = n++) {
-              const c = multi[i]!;
-              try {
-                const missing: string[] = [];
-                const bundle = await fetchBundle(apiBase, c.registrySlug!, token, { missing });
-                if (!bundle?.length) continue;
-                const sk = bundle.find((file) => file.path === "SKILL.md");
-                const note = bundleNote(bundle, missing);
-                c.files = bundle;
-                if (sk) c.raw = sk.contents.toString("utf8");
-                if (note) c.note = note;
-              } catch {
-                // Leave it as SKILL.md-only; installSkill already warns that a
-                // pack arrived without its assets.
-              }
-            }
-          }));
-        }
-        if (!out.length) throw new Error(`plugin ${spec.owner}/${spec.slug} returned no readable skills`);
-        const first = out[0]!;
-        first.note = `${out.length} skill${out.length === 1 ? "" : "s"} from the ${packName} plugin`
-          + (missing.length ? ` (${missing.length} member${missing.length === 1 ? "" : "s"} were not in the archive)` : "");
-        return out;
-      }
+      if (spec.kind === "plugin") return resolvePlugin(spec, source, f, net);
       // Everything that is not a bare owner/name is fetched directly; only a
       // registry slug gets the registry-first treatment below.
       if (spec.kind !== "slug") {
@@ -553,19 +689,26 @@ function makeDefaultDeps(flags: AddFlags): AddDeps {
           ...(spec.kind === "local" && r.file ? { files: collectFiles(dirname(r.file), dirname(r.file)) } : {}),
         }));
       }
-      const { api, base: apiBase, token } = createClient(f);
+      const { api, base: apiBase, token } = createClient(f, { fetch: net.fetch, sources: net.sources });
       return resolveRegistrySlug(spec, source, { api, base: apiBase, token });
     },
     get promptScope() { return canPrompt() ? promptScopeInteractive : undefined; },
     get promptAgents() { return canPrompt() ? promptAgentsInteractive : undefined; },
     fireInstall(registrySlug, f) {
-      const { api } = createClient(f);
+      try {
+        pingApi ??= createClient(f, { fetch: net.fetch, sources: net.sources, timeoutMs: PING_TIMEOUT_MS }).api;
+      } catch { return; } // best-effort: a bad --api base fails the install loudly elsewhere
+      const api = pingApi;
       const [owner, name] = registrySlug.split("/");
-      void api(`/api/skills/${owner}/${name}/install`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ via: "cli" }),
-      }).catch(() => {});
+      const send = () => {
+        pingsActive++;
+        void api(`/api/skills/${owner}/${name}/install`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ via: "cli" }),
+        }).catch(() => {}).finally(() => { pingsActive--; pingQueue.shift()?.(); });
+      };
+      if (pingsActive < MAX_PINGS) send(); else pingQueue.push(send);
     },
   };
 }
@@ -650,7 +793,7 @@ type AddOutcome =
   // `managed` counts as a successful install on its own: a plugin handed to
   // Claude Code produces no skill records, and without this the exit code is
   // computed from an empty records list and reports failure.
-  | { kind: "install"; scope: "global" | "project"; records: CandidateRecord[]; notices: Notice[]; paths: PathCtx; managed?: string }
+  | { kind: "install"; scope: "global" | "project"; records: CandidateRecord[]; notices: Notice[]; paths: PathCtx; managed?: string; missing?: string[] }
   | { kind: "list"; skills: { name: string; description: string }[] }
   | { kind: "fail"; error: string; blocked?: AddResult["blocked"]; notices?: Notice[] }
   | { kind: "cancel" };
@@ -677,7 +820,7 @@ function finish(flags: AddFlags, outcome: AddOutcome): AddResult {
       const doc = { ok: exitCode === 0, scope: outcome.scope, installed, blocked, warnings };
       return {
         written, blocked, exitCode,
-        output: json ? JSON.stringify(doc, null, 2) : renderHuman(outcome.notices, outcome.records, outcome.paths),
+        output: json ? JSON.stringify(doc, null, 2) : renderHuman(outcome.notices, outcome.records, outcome.paths, outcome.missing ?? []),
         scope: outcome.scope,
         agents: [...new Set(installed.flatMap((d) => d.targets.map((t) => t.agent)))],
       };
@@ -712,7 +855,7 @@ function finish(flags: AddFlags, outcome: AddOutcome): AddResult {
 }
 
 /** The only place that turns a finished run into terminal text. */
-function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathCtx): string {
+function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathCtx, missing: string[]): string {
   const lines = notices.map(noticeLine);
   for (const r of records) {
     if (r.kind === "blocked") { lines.push(pc.red(r.message)); continue; }
@@ -729,8 +872,10 @@ function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathC
     }, paths));
     // The summary already carries the skipped agents and the "replaced" line;
     // everything else the install had to say still gets its own notice line.
-    for (const n of r.notices) if (!n.suppressInSummary) lines.push(noticeLine(n));
+    for (const n of r.notices) if (!n.suppressInSummary && !n.jsonOnly) lines.push(noticeLine(n));
   }
+  // Members the plugin lists but its archive does not hold: named, one per line.
+  for (const slug of missing) lines.push(noticeLine(warnNotice(`${slug}: not in the plugin archive`)));
   return lines.join("\n");
 }
 
@@ -813,6 +958,11 @@ interface InstallContext {
 /** Lint gate, --deny gate, then the write. Never throws: a failure becomes a
  *  blocked record so the remaining candidates still get their turn. */
 async function installOne(c: AddCandidate, ctx: InstallContext): Promise<CandidateRecord> {
+  // Its files could not all be had. Installing what did arrive would leave a
+  // skill that points at files that are not there, and say nothing about it.
+  if (c.unavailable) {
+    return { kind: "blocked", name: c.name, reason: c.unavailable, message: `${GLYPH.blocked} ${c.name} blocked — ${c.unavailable}` };
+  }
   const result = lint(c.raw, { slug: c.slug });
   const securityFlags = [...new Set([...result.security.flags, ...(c.securityFlags ?? [])])];
   const deniedFlags = securityFlags.filter((f) => ctx.deny.has(f));
@@ -860,7 +1010,8 @@ async function installOne(c: AddCandidate, ctx: InstallContext): Promise<Candida
   if (out.replaced) notices.push(replacedNotice(`${c.name}: replaced previous install (${out.replaced})`));
   if (c.pinMiss) notices.push(warnNotice(`${c.name}: pinned commit unavailable upstream — fetched the source repo's default branch instead`));
   if (c.note) notices.push(warnNotice(`${c.name}: ${c.note}`));
-  if (c.type === "pack" && !c.files) {
+  for (const q of c.quietNotes ?? []) notices.push(quietNotice(`${c.name}: ${q}`));
+  if (c.companionsMissing) {
     notices.push(warnNotice(`${c.name} is a pack but its asset files could not be fetched — only SKILL.md was installed. It may reference missing files.`));
   }
   // Install counts are a registry-side number, and opting out must be honoured
@@ -1004,7 +1155,8 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
   for (const c of candidates) records.push(await installOne(c, ctx));
 
   const paths: PathCtx = { home: flags.home ?? homedir(), cwd: flags.cwd ?? process.cwd() };
-  return finish(flags, { kind: "install", scope: scope.global ? "global" : "project", records, notices, paths, ...(managed ? { managed: managed.name } : {}) });
+  const missing = candidates[0]?.plugin?.missing ?? [];
+  return finish(flags, { kind: "install", scope: scope.global ? "global" : "project", records, notices, paths, ...(managed ? { managed: managed.name } : {}), ...(missing.length ? { missing } : {}) });
 }
 
 /** `--copy` is the deprecated spelling of `--mode copy`; fold the two together

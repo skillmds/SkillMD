@@ -127,14 +127,42 @@ describe("pack installs", () => {
     expect(r.output).toMatch(/pinned commit unavailable/i);
     expect(r.output).not.toMatch(/only SKILL\.md/i);
   });
-  it("warns loudly when a pack has no fetchable files", async () => {
+  // Was keyed on `type === "pack" && !files`, which also fired for a pack that
+  // simply has no companions. The resolver now says so itself when it could not
+  // get a pack's files.
+  it("warns loudly when a pack's files could not be fetched", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "skillmd-pack-"));
+    const deps: AddDeps = {
+      resolve: async () => [{ name: "p", raw: VALID, slug: "p", registrySlug: "o/p", verified: true, type: "pack", companionsMissing: true }],
+      fireInstall: () => {},
+    };
+    const r = await runAdd("o/p", { ...sameHome(cwd) }, deps);
+    expect(r.output).toMatch(/pack.*only SKILL\.md/i);
+  });
+  it("installs a pack that has no companion files without a word about it", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "skillmd-pack-"));
     const deps: AddDeps = {
       resolve: async () => [{ name: "p", raw: VALID, slug: "p", registrySlug: "o/p", verified: true, type: "pack" }],
       fireInstall: () => {},
     };
     const r = await runAdd("o/p", { ...sameHome(cwd) }, deps);
-    expect(r.output).toMatch(/pack.*only SKILL\.md/i);
+    expect(r.exitCode).toBe(0);
+    expect(r.output).not.toMatch(/only SKILL\.md/i);
+  });
+  it("blocks a candidate whose files could not all be had, naming the reason, and installs the rest", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "skillmd-pack-"));
+    const deps: AddDeps = {
+      resolve: async () => [
+        { name: "p", raw: VALID, slug: "p", registrySlug: "o/p", type: "pack", unavailable: "could not fetch a.md: HTTP 503" },
+        { name: "demo", raw: VALID, slug: "demo", registrySlug: "o/demo" },
+      ],
+      fireInstall: () => {},
+    };
+    const r = await runAdd("o/p", { ...sameHome(cwd) }, deps);
+    expect(r.exitCode).toBe(1);
+    expect(r.blocked).toEqual([{ name: "p", reason: "could not fetch a.md: HTTP 503" }]);
+    expect(existsSync(join(cwd, ".agents", "skills", "p"))).toBe(false);
+    expect(existsSync(join(cwd, ".agents", "skills", "demo", "SKILL.md"))).toBe(true);
   });
 });
 
