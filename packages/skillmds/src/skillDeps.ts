@@ -103,6 +103,20 @@ export function partitionDeps(root: string, deps: DepEdge[]): { auto: DepEdge[];
   return { auto, related };
 }
 
+/** A repository as a comparable string: owner/repo, lowercase, however it was written. */
+function repoKey(r: string | null | undefined): string | undefined {
+  const k = r?.trim().toLowerCase().replace(/^(?:https?:\/\/(?:www\.)?github\.com\/|github:)/, "").replace(/\.git$/, "").replace(/\/+$/, "");
+  return k || undefined;
+}
+
+/** Do two records come from the same source repository? Yes when either says
+ *  nothing about where it came from: only a contradiction is a reason to refuse. */
+export function sameRepository(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = repoKey(a);
+  const y = repoKey(b);
+  return !x || !y || x === y;
+}
+
 /** What the resolver needs to know about a skill. `add` and the MCP tool each
  *  bring their own richer type; this is the part that is shared. */
 export interface DepNode {

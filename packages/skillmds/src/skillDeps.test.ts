@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { depsPath, expandByBodies, fetchClosure, parseClosure, partitionDeps, resolveDeps } from "./skillDeps.js";
+import { depsPath, expandByBodies, fetchClosure, parseClosure, partitionDeps, resolveDeps, sameRepository } from "./skillDeps.js";
 import type { Api, DepEdge, DepNode } from "./skillDeps.js";
 
 const edge = (slug: string, kind: string, depth: number, via: string): DepEdge => ({ slug, kind, depth, via });
@@ -365,5 +365,18 @@ describe("expandByBodies (the fallback)", () => {
     const a = node("a", ["b"]); const b = node("b");
     await expandByBodies([a], [a, b], async () => null);
     expect(b.usedBy).toBeUndefined();
+  });
+});
+
+describe("sameRepository", () => {
+  it("is true for the same repository however it is written", () => {
+    expect(sameRepository("o/skills", "https://github.com/O/skills.git")).toBe(true);
+    expect(sameRepository("github:o/skills", "https://www.github.com/o/skills/")).toBe(true);
+  });
+  it("is false only when both say where they come from and disagree", () => {
+    expect(sameRepository("o/skills", "someone/else")).toBe(false);
+    expect(sameRepository(undefined, "someone/else")).toBe(true);
+    expect(sameRepository("o/skills", null)).toBe(true);
+    expect(sameRepository(undefined, undefined)).toBe(true);
   });
 });

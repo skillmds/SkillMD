@@ -23,7 +23,8 @@ import { readConfig, writeConfig, telemetryDisabled } from "../config.js";
 import type { ResolveSources } from "../config.js";
 import { createPacer, describeFailure } from "../retry.js";
 import type { RetryOptions } from "../retry.js";
-import { expandPointers } from "../alsoInstall.js";
+import { expandByBodies, resolveDeps, sameRepository } from "../skillDeps.js";
+import type { Api, DepEdge, Lookup } from "../skillDeps.js";
 import { completeMembers, fetchPackManifest, fetchPackZip, openPluginArchive } from "../plugin.js";
 import type { CompletedMember } from "../plugin.js";
 import { safeText } from "../sanitize.js";
@@ -57,6 +58,10 @@ export interface AddFlags {
   allowUnverified?: boolean;
   skipLint?: boolean;
   deny?: string[];
+  /** --no-deps: install only what was asked for, and look nothing up for it. */
+  noDeps?: boolean;
+  /** --with-related: also install the skills a skill only points at (see, link). */
+  withRelated?: boolean;
   json?: boolean;
   token?: string;
   api?: string;
@@ -102,6 +107,9 @@ export interface AddCandidate {
   sourceRepo?: string;
   /** The skill that pointed at this one: it is here because that skill needs it. */
   usedBy?: string;
+  /** That skill's registry slug, and how it was written (skill_tool, invoke, see, link). */
+  viaSlug?: string;
+  depKind?: string;
 }
 
 export interface AddDeps {
@@ -121,10 +129,11 @@ export interface AddDeps {
   needsPrompt?: boolean;
   /** The clock the run's elapsed time is read from. Defaults to Date.now. */
   now?: () => number;
-  /** A skill that from points at by name, looked up beyond what the run already
-   *  holds (the registry, for a skill installed on its own). null for anything
-   *  it cannot say yes to: a pointer is never worth an error. */
-  resolvePointer?: (name: string, from: AddCandidate, flags: AddFlags) => Promise<AddCandidate | null>;
+  /** How the skills a skill depends on are found beyond what the run already
+   *  holds: the registry's closure endpoint (`api`) and a way to turn a registry
+   *  slug into a candidate (`lookup`). Absent, only the run's own skills count.
+   *  A dependency is never worth an error: whatever fails is a miss. */
+  dependencies?: { api?: Api; lookup?: Lookup<AddCandidate> };
 }
 
 
@@ -609,14 +618,16 @@ async function candidatesFromManifest(
 }
 
 /** The members a run installs. With no --skill (or '*', or --list) that is all
- *  of them; with --skill it is the ones named, plus what they point at. */
+ *  of them; with --skill it is the ones named, plus what their bodies call. The
+ *  registry's own list of dependencies is asked about later, for the skills
+ *  chosen here. */
 async function pickedBy<T extends { name: string; raw: string; registrySlug?: string; usedBy?: string }>(
   flags: AddFlags,
   named: T[],
   all: T[],
 ): Promise<T[]> {
   if (!flags.skill?.length || flags.skill.includes("*") || flags.list) return all;
-  return expandPointers(named, all);
+  return expandByBodies(named, all);
 }
 
 /** The route for a registry that has no manifest: the member list, the archive
@@ -686,28 +697,21 @@ async function candidatesFromListing(
   return wanted;
 }
 
-/** A repository as a comparable string: owner/repo, lowercase, however it was written. */
-function repoKey(r: string | null | undefined): string | undefined {
-  const k = r?.trim().toLowerCase().replace(/^(?:https?:\/\/(?:www\.)?github\.com\/|github:)/, "").replace(/\.git$/, "").replace(/\/+$/, "");
-  return k || undefined;
-}
-
-/** `owner/name` in the registry, for a skill that points at `name`. It has to
- *  exist (the registry answers 404 for anything not public), and when both
- *  records say where they come from it has to be the same repository: a skill
- *  of the same name from somewhere else is not the one that was meant. */
-async function registryPointer(name: string, from: AddCandidate, client: Client): Promise<AddCandidate | null> {
-  const owner = from.registrySlug!.split("/")[0]!;
+/** A registry skill, as a candidate, for a skill that depends on it. It has to
+ *  exist (the registry answers 404 for anything not public). `sameRepo` says the
+ *  slug is a guess made from a name in a body: then it must also come from the
+ *  same source repository, since a skill of the same name from somewhere else is
+ *  not the one that was meant. When the registry itself named it, it is taken. */
+async function registryDependency(slug: string, from: AddCandidate, sameRepo: boolean, client: Client): Promise<AddCandidate | null> {
+  const [owner, name] = slug.split("/") as [string, string];
   const skill = await client.api<RegistrySkill>(`/api/skills/${owner}/${name}`);
-  const a = repoKey(from.sourceRepo);
-  const b = repoKey(skill.source_repo);
-  if (a && b && a !== b) return null;
+  if (sameRepo && !sameRepository(from.sourceRepo, skill.source_repo)) return null;
   const source = `registry:${owner}/${name}`;
   try {
     return await candidateFromRecord(skill, owner, name, source, client, {});
   } catch (e) {
-    // The pointed skill failed its integrity check: that is a blocked skill
-    // like any other, not something to skip over.
+    // The dependency failed its integrity check: that is a blocked skill like
+    // any other, not something to skip over.
     if (e instanceof IntegrityError) {
       return { name, slug: name, registrySlug: `${owner}/${name}`, source, raw: "", unavailable: e.message };
     }
@@ -726,7 +730,7 @@ export function makeDefaultDeps(flags: AddFlags, net: NetOverrides = {}): AddDep
   // A plugin installs one ping per skill. They are told apart from the install
   // itself by never being waited for, and from each other by never more than
   // MAX_PINGS being in flight, so a 39-skill plugin does not end in a 39-request burst.
-  let pointerClient: Client | undefined;
+  let depsClient: Client | undefined;
   let pingApi: Client["api"] | undefined;
   let pingsActive = 0;
   const pingQueue: (() => void)[] = [];
@@ -754,15 +758,17 @@ export function makeDefaultDeps(flags: AddFlags, net: NetOverrides = {}): AddDep
       const { api, base: apiBase, token, fetch: doFetch } = createClient(f, { fetch: net.fetch, sources: net.sources });
       return resolveRegistrySlug(spec, source, { api, base: apiBase, token, fetch: doFetch });
     },
-    async resolvePointer(name, from, f) {
-      // Only a skill the registry itself gave us has an owner to look in.
-      if (!from.registrySlug || !/^(registry|plugin):/.test(from.source ?? "")) return null;
-      try {
-        pointerClient ??= createClient(f, { fetch: net.fetch, sources: net.sources, retry: net.retry ?? {} });
-        return await registryPointer(name, from, pointerClient);
-      } catch {
-        return null;
-      }
+    dependencies: {
+      // Built on first use: a client that cannot be built (a bad --api) is the
+      // install's own error to report, never a dependency's.
+      api: (path, init) => (depsClient ??= createClient(flags, { fetch: net.fetch, sources: net.sources, retry: net.retry ?? {} })).api(path, init),
+      async lookup(slug, { from, sameRepo }) {
+        // A name guessed from a body is only looked for beside a skill the
+        // registry itself gave us: that is the owner it is looked for under.
+        if (sameRepo && !(from.registrySlug && /^(registry|plugin):/.test(from.source ?? ""))) return null;
+        depsClient ??= createClient(flags, { fetch: net.fetch, sources: net.sources, retry: net.retry ?? {} });
+        return registryDependency(slug, from, sameRepo, depsClient);
+      },
     },
     get promptScope() { return canPrompt() ? promptScopeInteractive : undefined; },
     get promptAgents() { return canPrompt() ? promptAgentsInteractive : undefined; },
@@ -871,6 +877,10 @@ interface RunView {
   missing: string[];
   /** Plain remarks drawn right under the header. */
   infos: string[];
+  /** Dependencies found and not installed (soft ones), for --json. */
+  related: DepEdge[];
+  /** The one dim line that lists them, or none. */
+  relatedLine?: string;
   /** Time spent working, prompts excluded. */
   elapsedMs: number;
 }
@@ -904,7 +914,12 @@ function finish(flags: AddFlags, outcome: AddOutcome): AddResult {
       ].map((n) => n.text);
       const exitCode: 0 | 1 = blocked.length > 0 || (installed.length === 0 && !outcome.managed) ? 1 : 0;
       const also = outcome.records.flatMap((r) => (r.kind === "installed" && r.usedBy ? [{ name: r.doc.name, usedBy: r.usedBy }] : []));
-      const doc = { ok: exitCode === 0, scope: outcome.scope, installed, blocked, warnings, ...(also.length ? { alsoInstalled: also } : {}) };
+      const related = (outcome.view?.related ?? []).map((e) => ({ slug: e.slug, kind: e.kind, via: e.via }));
+      const doc = {
+        ok: exitCode === 0, scope: outcome.scope, installed, blocked, warnings,
+        ...(also.length ? { alsoInstalled: also } : {}),
+        ...(related.length ? { related } : {}),
+      };
       return {
         written, blocked, exitCode,
         output: json ? JSON.stringify(doc, null, 2) : renderHuman(outcome.notices, outcome.records, outcome.paths, outcome.view),
@@ -961,6 +976,7 @@ function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathC
     }
     for (const slug of missing) problems.push({ kind: "warn", text: `${slug}: not in the plugin archive` });
     lines.push(renderCompactRun({ label: view.label, agents: view.agents, installed, problems, infos: view.infos, elapsedMs: view.elapsedMs }));
+    if (view.relatedLine) lines.push(pc.dim(view.relatedLine));
     return lines.join("\n");
   }
   for (const r of records) {
@@ -982,6 +998,7 @@ function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathC
   }
   // Members the plugin lists but its archive does not hold: named, one per line.
   for (const slug of missing) lines.push(noticeLine(warnNotice(`${slug}: not in the plugin archive`)));
+  if (view?.relatedLine) lines.push(pc.dim(view.relatedLine));
   return lines.join("\n");
 }
 
@@ -1190,6 +1207,22 @@ async function tryPluginInstall(arg: string, flags: AddFlags): Promise<ManagedAt
   };
 }
 
+/** How many related skills the one line names before it says "+N more". */
+const RELATED_SHOWN = 8;
+/** Plugins and sources with more roots than this do not get the line: it would
+ *  be a list of everything every skill in them merely mentions. */
+const RELATED_MAX_ROOTS = 3;
+
+/** `related: a, b (add --with-related to install)`, or nothing. Names are the
+ *  slug's tail when the skill is the root's own owner's, the whole slug otherwise. */
+function relatedLine(related: DepEdge[], roots: AddCandidate[]): string | undefined {
+  if (!related.length || roots.length > RELATED_MAX_ROOTS) return undefined;
+  const owners = new Set(roots.map((r) => r.registrySlug?.split("/")[0]?.toLowerCase()));
+  const shown = related.map((e) => (owners.has(e.slug.split("/")[0]!.toLowerCase()) ? e.slug.split("/")[1]! : e.slug));
+  const list = shown.length > RELATED_SHOWN ? [...shown.slice(0, RELATED_SHOWN), `+${shown.length - RELATED_SHOWN} more`] : shown;
+  return `related: ${list.join(", ")} (add --with-related to install)`;
+}
+
 /** What a multi-skill run calls itself in its header: the plugin's name, else
  *  the source everything came from, else just how many skills there are. */
 function runLabel(candidates: AddCandidate[], arg: string, paths: PathCtx): string {
@@ -1269,11 +1302,19 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
   const early = gate(flags, d, candidates);
   if (early) return early;
 
-  // The skills these point at come too (see alsoInstall.ts). Done once the run
-  // is known to be an install, so --list shows what a source holds and no more.
-  const pointerStart = now();
-  candidates = await expandPointers(candidates, pool, d.resolvePointer ? { extra: (name, from) => d.resolvePointer!(name, from, flags) } : {});
-  resolveMs += now() - pointerStart;
+  // The skills these depend on come too (see skillDeps.ts), unless --no-deps.
+  // Done once the run is known to be an install, so --list shows what a source
+  // holds and no more. Roots are what was asked for; anything an earlier step
+  // already pulled in (a plugin's --skill selection) is in the run but is not one.
+  const roots = candidates.filter((c) => !c.usedBy);
+  let related: DepEdge[] = [];
+  if (!flags.noDeps) {
+    const depsStart = now();
+    const found = await resolveDeps(roots.filter((c) => !c.unavailable), pool, d.dependencies ?? {}, { withRelated: flags.withRelated, inRun: candidates });
+    candidates = [...candidates, ...found.pulled];
+    related = found.related;
+    resolveMs += now() - depsStart;
+  }
 
   const resolved = await scopeOf();
   if (!resolved) return finish(flags, { kind: "cancel" });
@@ -1306,6 +1347,8 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
     agents: chosen.targets,
     missing: candidates[0]?.plugin?.missing ?? [],
     infos: records.flatMap((r) => (r.kind === "installed" && r.usedBy ? [`also installs ${r.doc.name} (used by ${r.usedBy})`] : [])),
+    related,
+    relatedLine: relatedLine(related, roots),
     elapsedMs,
   };
   return finish(flags, { kind: "install", scope: scope.global ? "global" : "project", records, notices, paths, view, ...(managed ? { managed: managed.name } : {}) });
@@ -1316,6 +1359,8 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
 export function addFlags(opts: AddFlags & { copy?: boolean }, parent?: AddFlags): AddFlags {
   const merged: AddFlags = { ...parent, ...opts };
   if (opts.copy) merged.mode = "copy";
+  // commander turns --no-deps into deps: false
+  if ((opts as { deps?: boolean }).deps === false) merged.noDeps = true;
   return merged;
 }
 
@@ -1339,6 +1384,8 @@ export function addCommand(): Command {
     .addOption(new Option("--allow-unverified").hideHelp())
     .option("--skip-lint", "install even if the skill fails lint")
     .option("--deny <flags...>", "refuse skills carrying any of these security flags (opt-in)")
+    .option("--with-related", "also install the skills a skill only points at (see, link), not just the ones it calls")
+    .option("--no-deps", "install only what was asked for: no dependencies, and nothing looked up for them")
     .action(async (source: string, opts: AddFlags & { copy?: boolean }, cmd: Command) => {
       const merged = addFlags(opts, cmd.parent?.opts() as AddFlags | undefined);
       const { run, printed } = await runAddWithUI(source, merged);

@@ -142,6 +142,9 @@ describe("plugin install through the manifest", () => {
     const gate = new Promise<void>((r) => { release = r; });
     const members = members39.slice(0, 2);
     const { f } = fakeFetch(async (r) => {
+      // The requests for dependencies come after the install is resolved (and, for a
+      // run this small, one per member); it is the plugin's own two that must overlap.
+      if (!r.path.startsWith("/api/packs/")) return undefined;
       started.push(r.path);
       if (started.length < 2) await gate; // the first waits for the second to be sent
       else release();
@@ -636,20 +639,23 @@ describe("pointer skills", () => {
     expect(asked(log).filter((n) => n === "alpha")).toHaveLength(1); // never fetched again as a pointer
   });
 
-  it("follows a pointer of a pointer, and stops there", async () => {
+  // The depth cap was two; dependencies are followed three deep now, like the
+  // registry's own closure.
+  it("follows a pointer of a pointer of a pointer, and stops there", async () => {
     const { f, log } = registry({
       alpha: { extra: POINT("beta") }, beta: { extra: POINT("gamma") }, gamma: { extra: POINT("delta") },
       delta: { extra: POINT("epsilon") }, epsilon: {},
     });
     const flags = flagsFor({ agent: ["cursor"] });
     const run = await runAdd("o/alpha", flags, depsFor(flags, f));
-    expect(run.written.map((w) => w.name).sort()).toEqual(["alpha", "beta", "gamma"]);
+    expect(run.written.map((w) => w.name).sort()).toEqual(["alpha", "beta", "delta", "gamma"]);
     expect(lines(run.output).filter((l) => l.startsWith("also installs"))).toEqual([
       "also installs beta (used by alpha)",
       "also installs gamma (used by beta)",
+      "also installs delta (used by gamma)",
     ]);
-    expect(asked(log)).not.toContain("delta");
-    expect(existsSync(installed(flags, "delta"))).toBe(false);
+    expect(asked(log)).not.toContain("epsilon");
+    expect(existsSync(installed(flags, "epsilon"))).toBe(false);
   });
 
   it("leaves alone a pointed skill that is already installed, whatever it came from", async () => {
