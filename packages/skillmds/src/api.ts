@@ -4,35 +4,13 @@ import { createHash } from "node:crypto";
 import { isAllowedSourceUrl } from "@skillmds/core";
 import { FETCH_TIMEOUT_MS, MAX_PACK_BYTES, MAX_PACK_FILES } from "./limits.js";
 import { resolveApi, resolveToken, realSources, hostOf, DEFAULT_API } from "./config.js";
+import { IntegrityError, RegistryError } from "./errors.js";
 import type { GlobalFlags, ResolveSources } from "./config.js";
 
 // SKILL.md materialization + the companion-file SSRF guard live in
 // @skillmds/core so the CLI and the MCP server share one implementation.
 export { isAllowedSourceUrl, reconstructSkillMd, skillMdFor } from "@skillmds/core";
-
-/** Thrown when a downloaded file's bytes don't match the registry's recorded
- *  sha256. Tagged so the installer can hard-block instead of silently falling
- *  back to an unverified source. */
-export class IntegrityError extends Error {
-  readonly integrity = true;
-  constructor(message: string) {
-    super(message);
-    this.name = "IntegrityError";
-  }
-}
-
-/** Thrown when a registry request fails. `status` is set for HTTP error
- *  responses and absent for network-level failures (DNS, connection refused,
- *  proxy CONNECT denial). Callers use it to tell "the skill isn't in the
- *  registry" (404 — falling back to GitHub is correct) apart from "the
- *  registry can't be reached from here" (egress-blocked sandboxes, proxies —
- *  falling back would bury the real cause under a confusing GitHub 404). */
-export class RegistryError extends Error {
-  constructor(message: string, readonly status?: number) {
-    super(message);
-    this.name = "RegistryError";
-  }
-}
+export { IntegrityError, RegistryError };
 
 export interface ClientOptions {
   fetch?: typeof fetch;
