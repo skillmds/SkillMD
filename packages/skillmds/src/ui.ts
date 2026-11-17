@@ -330,3 +330,96 @@ export function renderInstallSummary(i: InstallSummaryInput, ctx: PathCtx & { wi
 
 /** The header line for framed commands: "skill" + orange "md". */
 export const banner = (): string => brandWord();
+
+// ---------------------------------------------------------------------------
+// A run that installs several skills (a plugin, `--skill '*'`, a multi-skill
+// repo): one header, one line per skill, what went wrong, one summary. The
+// agents and the link mode are named once, in the summary, instead of once per
+// skill per agent.
+// ---------------------------------------------------------------------------
+
+export interface CompactSkill {
+  name: string;
+  score: number;
+  flags: string[];
+  targets: InstallTarget[];
+  skipped: { agent: string; reason: string }[];
+  /** Source of the install this one replaced, or "untracked". */
+  replaced?: string;
+}
+
+export type CompactProblem =
+  | { kind: "failed"; name: string; reason: string }
+  | { kind: "warn"; text: string };
+
+export interface CompactRun {
+  /** What is being installed: a plugin's name, a source. */
+  label: string;
+  /** The agents the run set out to install to. */
+  agents: string[];
+  installed: CompactSkill[];
+  /** Skills that did not install and warnings, in the order they came up. */
+  problems: CompactProblem[];
+  /** Plain remarks, drawn right under the header. */
+  infos: string[];
+  elapsedMs: number;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The agents a skill went to and how, as one comparable string. */
+const targetSig = (s: CompactSkill) => s.targets.map((t) => `${t.agent}:${t.mode}`).sort().join(",");
+
+const MODE_WORD: Record<InstallTarget["mode"], string> = { junction: "linked", symlink: "linked", copy: "copied", canonical: "canonical" };
+
+/** How many agents a summary names before it says "+N more". */
+const AGENTS_SHOWN = 6;
+
+export function renderCompactRun(run: CompactRun): string {
+  const total = run.installed.length + run.problems.filter((p) => p.kind === "failed").length;
+  const failed = run.problems.filter((p) => p.kind === "failed").length;
+  const out: string[] = [];
+
+  out.push(pc.bold(`Installing ${run.label}`) + pc.dim(`, ${plural(total, "skill")}, to ${plural(run.agents.length, "agent")}`));
+  out.push(...run.infos);
+
+  // The most common destination is the run's own; a skill that went somewhere
+  // else says so on its own line and nowhere else.
+  const counts = new Map<string, { n: number; first: CompactSkill }>();
+  for (const s of run.installed) {
+    const e = counts.get(targetSig(s));
+    if (e) e.n++; else counts.set(targetSig(s), { n: 1, first: s });
+  }
+  let usual: CompactSkill | undefined;
+  let best = 0;
+  for (const e of counts.values()) if (e.n > best) { best = e.n; usual = e.first; }
+  const usualSig = usual ? targetSig(usual) : "";
+
+  for (const s of run.installed) {
+    const parts = [`score ${s.score}`];
+    if (s.flags.length) parts.push(s.flags.join(", "));
+    if (s.replaced) parts.push(`replaced previous install (${s.replaced === "untracked" ? "untracked directory" : s.replaced})`);
+    if (targetSig(s) !== usualSig) {
+      const where = `agents: ${[...new Set(s.targets.map((t) => t.agent))].join(", ")}`;
+      parts.push(s.skipped.length ? `${where}; skipped ${s.skipped.map((k) => `${k.agent} (${k.reason})`).join(", ")}` : where);
+    }
+    out.push(pc.green(`${GLYPH.ok} ${s.name}`) + pc.dim(`  ${parts.join("  ")}`));
+  }
+
+  for (const p of run.problems) {
+    out.push(p.kind === "failed" ? pc.red(`${GLYPH.blocked} ${p.name}  ${p.reason}`) : pc.yellow(`${GLYPH.warn} ${p.text}`));
+  }
+
+  const count = pc.green(`${run.installed.length} installed`) + (failed ? pc.red(`, ${failed} failed`) : "");
+  const dot = pc.dim(" · ");
+  const bits = [count];
+  if (usual) {
+    const names = [...new Set(usual.targets.map((t) => t.agent))];
+    const shown = names.length > AGENTS_SHOWN + 1 ? [...names.slice(0, AGENTS_SHOWN), `+${names.length - AGENTS_SHOWN} more`] : names;
+    bits.push(pc.dim(`${plural(names.length, "agent")} (${shown.join(", ")})`));
+    bits.push(pc.dim([...new Set(usual.targets.map((t) => MODE_WORD[t.mode]))].join(" + ")));
+  }
+  bits.push(pc.dim(`${(run.elapsedMs / 1000).toFixed(1)} s`));
+  out.push(bits.join(dot));
+  return out.join("\n");
+}

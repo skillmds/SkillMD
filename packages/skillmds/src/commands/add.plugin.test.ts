@@ -441,3 +441,105 @@ describe("install pings", () => {
     expect(run.written).toHaveLength(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// What a multi-skill run says. One header, one line per skill, the problems
+// together after them, one summary. Nothing else in a normal run.
+// ---------------------------------------------------------------------------
+describe("the terminal output of a plugin install", () => {
+  const AGENTS = ["cursor", "codex", "windsurf", "opencode", "gemini-cli"];
+  const members: MemberSpec[] = Array.from({ length: 39 }, (_, i) => ({
+    name: `skill-${String(i).padStart(2, "0")}`,
+    // Companions the registry holds no checksum for: the remark that used to
+    // be printed once per skill.
+    files: i % 4 === 0 ? [{ path: "agents/openai.yaml", body: `agent ${i}`, sha: "none" as const }] : [],
+  }));
+  const registry = (over: (r: Req) => Response | undefined = () => undefined) => fakeFetch((r) => {
+    const o = over(r);
+    if (o) return o;
+    if (r.path.endsWith("/manifest")) return json(manifestFor(members));
+    if (r.path.endsWith("/download")) return new Response(zipFor(members), { status: 200 });
+  });
+  const withClock = (flags: AddFlags, f: typeof fetch) => {
+    const ticks = [10_000, 14_234]; // the run starts at 10.000 s and ends at 14.234 s
+    let i = 0;
+    return { ...depsFor(flags, f), now: () => ticks[Math.min(i++, ticks.length - 1)]! };
+  };
+
+  it("is the header, 39 skill lines and the summary, and nothing else", async () => {
+    const { f } = registry();
+    const flags = flagsFor({ agent: AGENTS });
+    const run = await runAdd("plugin:o/p", flags, withClock(flags, f));
+    expect(run.exitCode).toBe(0);
+    const lines = stripAnsi(run.output).split("\n");
+    expect(lines).toHaveLength(41);
+    expect(lines[0]).toBe("Installing Test Plugin, 39 skills, to 5 agents");
+    expect(lines[1]).toBe("✓ skill-00  score 100  docs_only");
+    expect(lines.slice(1, 40).every((l) => /^✓ skill-\d\d  score \d+/.test(l))).toBe(true);
+    expect(lines[40]).toMatch(/^39 installed · 5 agents \(cursor, codex, windsurf, opencode, gemini-cli\) · (linked|copied|canonical)( \+ (linked|copied|canonical))? · 4\.2 s$/);
+  });
+
+  it("carries none of the noise it used to", async () => {
+    const { f } = registry();
+    const flags = flagsFor({ agent: AGENTS });
+    const out = stripAnsi((await runAdd("plugin:o/p", flags, withClock(flags, f))).output);
+    expect(out).not.toMatch(/skill-00: 39 skills from/);                // the header says it
+    expect(out).not.toMatch(/came straight from the source repo|no checksum/); // internal detail
+    expect(out).not.toMatch(/\bjunction\b|\.cursor\/skills|~\/\.cursor/);      // a line per agent per skill
+    expect(out).not.toContain("⚠");                                      // warnings are for failures
+  });
+
+  it("puts every failure together after the skill lines, with its reason", async () => {
+    // skill-04 lists a companion; take it out of the archive so it becomes a gap that 429s.
+    const gapped = members.map((m) => (m.name === "skill-04" || m.name === "skill-08" ? { ...m, files: m.files!.map((x) => ({ ...x, inZip: false })) } : m));
+    const reg = fakeFetch((r) => {
+      if (r.path.endsWith("/manifest")) return json(manifestFor(gapped));
+      if (r.path.endsWith("/download")) return new Response(zipFor(gapped), { status: 200 });
+      if (r.path.includes("/files/")) return new Response("", { status: 429, headers: { "retry-after": "2" } });
+    });
+    const flags = flagsFor({ agent: AGENTS });
+    const run = await runAdd("plugin:o/p", flags, withClock(flags, reg.f));
+    expect(run.exitCode).toBe(1);
+    const lines = stripAnsi(run.output).split("\n");
+    expect(lines).toHaveLength(1 + 37 + 2 + 1);
+    expect(lines.slice(1, 38).every((l) => l.startsWith("✓ "))).toBe(true);
+    expect(lines.slice(38, 40)).toEqual([
+      "✗ skill-04  could not fetch agents/openai.yaml: HTTP 429, retry in 2 s",
+      "✗ skill-08  could not fetch agents/openai.yaml: HTTP 429, retry in 2 s",
+    ]);
+    expect(lines[40]).toMatch(/^37 installed, 2 failed · 5 agents /);
+  });
+
+  it("names a member that is missing from the archive among the problems", async () => {
+    const reg = fakeFetch((r) => {
+      if (r.path.endsWith("/manifest")) return json(manifestFor(members.slice(0, 3)));
+      if (r.path.endsWith("/download")) return new Response(zipFor(members.slice(0, 3), ["skill-01"]), { status: 200 });
+    });
+    const flags = flagsFor({ agent: AGENTS });
+    const run = await runAdd("plugin:o/p", flags, withClock(flags, reg.f));
+    const lines = stripAnsi(run.output).split("\n");
+    expect(lines[0]).toBe("Installing Test Plugin, 2 skills, to 5 agents");
+    expect(lines).toContain("⚠ o/skill-01: not in the plugin archive");
+    expect(lines.at(-1)).toMatch(/^2 installed · /);
+  });
+
+  it("leaves --json as it was: the same document, with the quiet remarks still among the warnings", async () => {
+    const { f } = registry();
+    const flags = flagsFor({ agent: AGENTS, json: true });
+    const doc = JSON.parse((await runAdd("plugin:o/p", flags, depsFor(flags, f))).output);
+    expect(Object.keys(doc)).toEqual(["ok", "scope", "installed", "blocked", "warnings"]);
+    expect(doc.installed).toHaveLength(39);
+    expect(doc.warnings).toContain("skill-00: 39 skills from the Test Plugin plugin");
+    expect(doc.warnings.some((w: string) => /no checksum/.test(w))).toBe(true);
+  });
+
+  it("is still the plain single-skill block when one skill is picked out of the plugin", async () => {
+    const { f } = registry();
+    const flags = flagsFor({ agent: ["cursor"], skill: ["skill-04"] });
+    const run = await runAdd("plugin:o/p", flags, depsFor(flags, f));
+    const out = stripAnsi(run.output);
+    expect(out).toMatch(/^✓ skill-04  score \d+/);
+    expect(out).toMatch(/\bcursor\b.*\.cursor/); // the per-agent row a single skill has always had
+    expect(out).not.toMatch(/^Installing /m);
+  });
+});

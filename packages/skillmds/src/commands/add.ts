@@ -25,8 +25,8 @@ import type { RetryOptions } from "../retry.js";
 import { completeMembers, fetchPackManifest, fetchPackZip, openPluginArchive } from "../plugin.js";
 import type { CompletedMember } from "../plugin.js";
 import { safeText } from "../sanitize.js";
-import { GLYPH, banner, renderInstallSummary, stripAnsi } from "../ui.js";
-import type { PathCtx } from "../ui.js";
+import { GLYPH, banner, renderCompactRun, renderInstallSummary, shortPath, stripAnsi } from "../ui.js";
+import type { CompactProblem, PathCtx } from "../ui.js";
 
 // Re-exported so `skillmd add`'s long-standing public surface keeps working for
 // importers (and tests) that still reach for them here. The implementations
@@ -113,6 +113,8 @@ export interface AddDeps {
   promptAgents?: (ctx: { detected: string[]; dirFor: (id: string) => string; managed?: string }) => Promise<string[] | null>;
   /** Test hook: a prompt is required but cannot be shown. Overrides defaultNeedsPrompt(). */
   needsPrompt?: boolean;
+  /** The clock the run's elapsed time is read from. Defaults to Date.now. */
+  now?: () => number;
 }
 
 
@@ -789,11 +791,23 @@ type CandidateRecord =
   | { kind: "installed"; doc: InstalledDoc; score: number; securityFlags: string[]; notices: Notice[]; source: string; replaced?: string }
   | { kind: "blocked"; name: string; reason: string; message: string };
 
+/** What the terminal says about a run beyond its records. */
+interface RunView {
+  /** What was installed: a plugin's name, a source. */
+  label: string;
+  /** The agents the run set out to install to. */
+  agents: string[];
+  /** Members a plugin lists that its archive did not hold. */
+  missing: string[];
+  /** Time spent working, prompts excluded. */
+  elapsedMs: number;
+}
+
 type AddOutcome =
   // `managed` counts as a successful install on its own: a plugin handed to
   // Claude Code produces no skill records, and without this the exit code is
   // computed from an empty records list and reports failure.
-  | { kind: "install"; scope: "global" | "project"; records: CandidateRecord[]; notices: Notice[]; paths: PathCtx; managed?: string; missing?: string[] }
+  | { kind: "install"; scope: "global" | "project"; records: CandidateRecord[]; notices: Notice[]; paths: PathCtx; managed?: string; view?: RunView }
   | { kind: "list"; skills: { name: string; description: string }[] }
   | { kind: "fail"; error: string; blocked?: AddResult["blocked"]; notices?: Notice[] }
   | { kind: "cancel" };
@@ -820,7 +834,7 @@ function finish(flags: AddFlags, outcome: AddOutcome): AddResult {
       const doc = { ok: exitCode === 0, scope: outcome.scope, installed, blocked, warnings };
       return {
         written, blocked, exitCode,
-        output: json ? JSON.stringify(doc, null, 2) : renderHuman(outcome.notices, outcome.records, outcome.paths, outcome.missing ?? []),
+        output: json ? JSON.stringify(doc, null, 2) : renderHuman(outcome.notices, outcome.records, outcome.paths, outcome.view),
         scope: outcome.scope,
         agents: [...new Set(installed.flatMap((d) => d.targets.map((t) => t.agent)))],
       };
@@ -854,9 +868,28 @@ function finish(flags: AddFlags, outcome: AddOutcome): AddResult {
   }
 }
 
+/** Does the terminal draw this remark? */
+const drawn = (n: Notice) => !n.suppressInSummary && !n.jsonOnly;
+
 /** The only place that turns a finished run into terminal text. */
-function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathCtx, missing: string[]): string {
+function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathCtx, view?: RunView): string {
   const lines = notices.map(noticeLine);
+  const missing = view?.missing ?? [];
+  // Several skills in one run: a header, a line each, the problems together,
+  // one summary. A block of per-agent lines for every skill buried the answer.
+  if (view && records.length > 1) {
+    const installed = records.flatMap((r) => (r.kind === "installed"
+      ? [{ name: r.doc.name, score: r.score, flags: r.securityFlags, targets: r.doc.targets, skipped: r.doc.skipped, ...(r.replaced ? { replaced: r.replaced } : {}) }]
+      : []));
+    const problems: CompactProblem[] = [];
+    for (const r of records) {
+      if (r.kind === "blocked") problems.push({ kind: "failed", name: r.name, reason: r.reason });
+      else for (const n of r.notices) if (drawn(n)) problems.push({ kind: "warn", text: n.text });
+    }
+    for (const slug of missing) problems.push({ kind: "warn", text: `${slug}: not in the plugin archive` });
+    lines.push(renderCompactRun({ label: view.label, agents: view.agents, installed, problems, infos: [], elapsedMs: view.elapsedMs }));
+    return lines.join("\n");
+  }
   for (const r of records) {
     if (r.kind === "blocked") { lines.push(pc.red(r.message)); continue; }
     const { doc } = r;
@@ -872,7 +905,7 @@ function renderHuman(notices: Notice[], records: CandidateRecord[], paths: PathC
     }, paths));
     // The summary already carries the skipped agents and the "replaced" line;
     // everything else the install had to say still gets its own notice line.
-    for (const n of r.notices) if (!n.suppressInSummary && !n.jsonOnly) lines.push(noticeLine(n));
+    for (const n of r.notices) if (drawn(n)) lines.push(noticeLine(n));
   }
   // Members the plugin lists but its archive does not hold: named, one per line.
   for (const slug of missing) lines.push(noticeLine(warnNotice(`${slug}: not in the plugin archive`)));
@@ -1076,6 +1109,18 @@ async function tryPluginInstall(arg: string, flags: AddFlags): Promise<ManagedAt
   };
 }
 
+/** What a multi-skill run calls itself in its header: the plugin's name, else
+ *  the source everything came from, else just how many skills there are. */
+function runLabel(candidates: AddCandidate[], arg: string, paths: PathCtx): string {
+  const plugin = candidates.find((c) => c.plugin)?.plugin?.name;
+  if (plugin) return plugin;
+  const sources = new Set(candidates.map((c) => c.source ?? (c.registrySlug ? `registry:${c.registrySlug}` : provenanceFor(arg))));
+  if (sources.size !== 1) return `${candidates.length} skills`;
+  const [only] = [...sources];
+  if (only!.startsWith("local:")) return `local:${shortPath(only!.slice(6), paths)}`;
+  return only!.replace(/^registry:/, "");
+}
+
 export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Promise<AddResult> {
   const d = deps ?? makeDefaultDeps(flags);
   const env = flags.env ?? process.env;
@@ -1118,6 +1163,10 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
     }
   }
 
+  const now = d.now ?? Date.now;
+  // Time spent working. A person choosing a scope or agents is not work, so
+  // the clock is read around the resolving and around the installing only.
+  const resolveStart = now();
   let candidates: AddCandidate[];
   try {
     candidates = await resolveCandidates(arg, flags, d);
@@ -1132,6 +1181,7 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
     throw e;
   }
 
+  const resolveMs = now() - resolveStart;
   const early = gate(flags, d, candidates);
   if (early) return early;
 
@@ -1152,11 +1202,18 @@ export async function runAdd(arg: string, flags: AddFlags, deps?: AddDeps): Prom
 
   const ctx: InstallContext = { arg, flags, deny: new Set(flags.deny ?? []), scope, targets: chosen.targets, env, deps: d };
   const records: CandidateRecord[] = [];
+  const installStart = now();
   for (const c of candidates) records.push(await installOne(c, ctx));
+  const elapsedMs = resolveMs + (now() - installStart);
 
   const paths: PathCtx = { home: flags.home ?? homedir(), cwd: flags.cwd ?? process.cwd() };
-  const missing = candidates[0]?.plugin?.missing ?? [];
-  return finish(flags, { kind: "install", scope: scope.global ? "global" : "project", records, notices, paths, ...(managed ? { managed: managed.name } : {}), ...(missing.length ? { missing } : {}) });
+  const view: RunView = {
+    label: runLabel(candidates, arg, paths),
+    agents: chosen.targets,
+    missing: candidates[0]?.plugin?.missing ?? [],
+    elapsedMs,
+  };
+  return finish(flags, { kind: "install", scope: scope.global ? "global" : "project", records, notices, paths, view, ...(managed ? { managed: managed.name } : {}) });
 }
 
 /** `--copy` is the deprecated spelling of `--mode copy`; fold the two together

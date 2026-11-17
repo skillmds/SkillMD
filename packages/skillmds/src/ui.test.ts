@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { GLYPH, renderInstallSummary, shortPath, stripAnsi, table, truncateVisible } from "./ui.js";
+import { GLYPH, renderCompactRun, renderInstallSummary, shortPath, stripAnsi, table, truncateVisible } from "./ui.js";
+import type { CompactSkill } from "./ui.js";
 
 // Written as literal SGR sequences rather than through picocolors: whether pc
 // emits colour at all depends on the terminal the suite happens to run in.
@@ -111,5 +112,115 @@ describe("renderInstallSummary", () => {
     }, { home: "/h", cwd: "/h/p", width: 100 });
     expect(stripAnsi(out)).toContain(`${GLYPH.replaced} replaced previous install (untracked directory)`);
     expect(stripAnsi(out).startsWith(`${GLYPH.ok} demo`)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A run that installs more than one skill is one header, one line per skill and
+// one summary: not a block of per-agent lines for every skill.
+// ---------------------------------------------------------------------------
+describe("renderCompactRun", () => {
+  const AGENTS = ["cursor", "codex", "windsurf", "opencode", "gemini-cli"];
+  const target = (agent: string, mode: "junction" | "symlink" | "copy" | "canonical" = "junction") => ({ agent, path: `/h/.${agent}/skills/x`, mode });
+  const skill = (name: string, over: Partial<CompactSkill> = {}): CompactSkill => ({
+    name, score: 90, flags: [], targets: AGENTS.map((a) => target(a)), skipped: [], ...over,
+  });
+  const lines = (s: string) => stripAnsi(s).split("\n");
+  const run = (over: Partial<Parameters<typeof renderCompactRun>[0]> = {}) => renderCompactRun({
+    label: "Mattpocock Skills", agents: AGENTS, installed: [], problems: [], infos: [], elapsedMs: 4234, ...over,
+  });
+
+  it("is a header, a line per skill, and one summary naming the agents and the link mode", () => {
+    const out = run({ installed: [skill("tdd", { flags: ["docs_only"] }), skill("pr", { score: 85, flags: ["executes_scripts"] }), skill("plain", { score: 100 })] });
+    expect(lines(out)).toEqual([
+      "Installing Mattpocock Skills, 3 skills, to 5 agents",
+      "✓ tdd  score 90  docs_only",
+      "✓ pr  score 85  executes_scripts",
+      "✓ plain  score 100",
+      "3 installed · 5 agents (cursor, codex, windsurf, opencode, gemini-cli) · linked · 4.2 s",
+    ]);
+  });
+
+  it("never prints the per-agent junction lines", () => {
+    const out = stripAnsi(run({ installed: [skill("tdd"), skill("pr")] }));
+    expect(out).not.toMatch(/\.cursor\/skills|~\/\.|\bjunction\b/);
+  });
+
+  it("gets the singular right", () => {
+    const out = lines(run({ agents: ["cursor"], installed: [skill("only", { targets: [target("cursor")] })] }));
+    expect(out[0]).toBe("Installing Mattpocock Skills, 1 skill, to 1 agent");
+    expect(out.at(-1)).toBe("1 installed · 1 agent (cursor) · linked · 4.2 s");
+  });
+
+  it("puts what is about to be pulled in right under the header, as plain text", () => {
+    const out = run({ installed: [skill("grill-me"), skill("grilling")], infos: ["also installs grilling (used by grill-me)"] });
+    expect(lines(out).slice(0, 3)).toEqual([
+      "Installing Mattpocock Skills, 2 skills, to 5 agents",
+      "also installs grilling (used by grill-me)",
+      "✓ grill-me  score 90",
+    ]);
+    // No colour and no glyph on that line.
+    expect(out.split("\n")[1]).toBe("also installs grilling (used by grill-me)");
+  });
+
+  it("collects what went wrong after the skill lines and before the summary", () => {
+    const out = run({
+      installed: [skill("a"), skill("b")],
+      problems: [
+        { kind: "failed", name: "triage", reason: "could not fetch agents/openai.yaml: HTTP 429, retry in 2 s" },
+        { kind: "warn", text: "o/beta: not in the plugin archive" },
+      ],
+    });
+    expect(lines(out)).toEqual([
+      "Installing Mattpocock Skills, 3 skills, to 5 agents",
+      "✓ a  score 90",
+      "✓ b  score 90",
+      "✗ triage  could not fetch agents/openai.yaml: HTTP 429, retry in 2 s",
+      "⚠ o/beta: not in the plugin archive",
+      "2 installed, 1 failed · 5 agents (cursor, codex, windsurf, opencode, gemini-cli) · linked · 4.2 s",
+    ]);
+  });
+
+  it("drops the agents from the summary when nothing was installed", () => {
+    const out = lines(run({ installed: [], problems: [{ kind: "failed", name: "x", reason: "integrity check failed" }, { kind: "failed", name: "y", reason: "unsafe path" }] }));
+    expect(out[0]).toBe("Installing Mattpocock Skills, 2 skills, to 5 agents");
+    expect(out.at(-1)).toBe("0 installed, 2 failed · 4.2 s");
+  });
+
+  it("says on a skill's own line when it went to different agents than the rest", () => {
+    const out = lines(run({ installed: [
+      skill("a"), skill("b"), skill("c"),
+      skill("odd", { targets: [target("cursor"), target("codex")], skipped: [{ agent: "windsurf", reason: "project-only agent" }] }),
+    ] }));
+    expect(out).toContain("✓ odd  score 90  agents: cursor, codex; skipped windsurf (project-only agent)");
+    expect(out).toContain("✓ a  score 90");
+    // The rest of the run is still named once, in the summary.
+    expect(out.at(-1)).toMatch(/^4 installed · 5 agents \(cursor, codex, windsurf, opencode, gemini-cli\) · linked/);
+  });
+
+  it("says on a skill's own line that it replaced an install", () => {
+    const out = lines(run({ installed: [skill("a"), skill("b", { replaced: "github:o/r" }), skill("c", { replaced: "untracked" })] }));
+    expect(out).toContain("✓ b  score 90  replaced previous install (github:o/r)");
+    expect(out).toContain("✓ c  score 90  replaced previous install (untracked directory)");
+  });
+
+  it("names the link mode the run actually used", () => {
+    const copied = lines(run({ installed: [skill("a", { targets: AGENTS.map((a) => target(a, "copy")) })] })).at(-1)!;
+    expect(copied).toContain(" · copied · ");
+    const symlinked = lines(run({ installed: [skill("a", { targets: AGENTS.map((a) => target(a, "symlink")) })] })).at(-1)!;
+    expect(symlinked).toContain(" · linked · ");
+    const mixed = lines(run({ installed: [skill("a", { targets: [target("cursor"), target("codex", "canonical")] })], agents: ["cursor", "codex"] })).at(-1)!;
+    expect(mixed).toBe("1 installed · 2 agents (cursor, codex) · linked + canonical · 4.2 s");
+  });
+
+  it("does not list a long run of agents in full", () => {
+    const many = Array.from({ length: 12 }, (_, i) => `agent${i}`);
+    const out = lines(run({ agents: many, installed: [skill("a", { targets: many.map((a) => target(a)) })] })).at(-1)!;
+    expect(out).toBe("1 installed · 12 agents (agent0, agent1, agent2, agent3, agent4, agent5, +6 more) · linked · 4.2 s");
+  });
+
+  it("shows seconds to one decimal", () => {
+    expect(lines(run({ installed: [skill("a")], elapsedMs: 80 })).at(-1)).toMatch(/ · 0\.1 s$/);
+    expect(lines(run({ installed: [skill("a")], elapsedMs: 12_000 })).at(-1)).toMatch(/ · 12\.0 s$/);
   });
 });
