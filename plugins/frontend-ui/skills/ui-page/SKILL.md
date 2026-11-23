@@ -10,6 +10,8 @@ date_added: "2026-04-08"
 author: bitjaru
 tags: [ui, page-design, mobile, layout, styleseed]
 tools: [claude, cursor, codex, gemini]
+metadata:
+  source: https://skillmd.com/skills/iamanacarolinarezende/ui-page
 ---
 
 # UI Page

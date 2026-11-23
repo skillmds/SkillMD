@@ -5,8 +5,9 @@ allowed-tools:
   - Bash
   - Read
   - AskUserQuestion
+metadata:
+  source: https://skillmd.com/skills/thedotmack/cloud-sync
 ---
-
 
 # Cloud Sync (cmem.ai Pro)
 

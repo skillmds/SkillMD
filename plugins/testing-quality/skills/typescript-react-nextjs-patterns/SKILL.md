@@ -10,8 +10,9 @@ description: >
   form validation, state management, performance, or code review.
   Also use for "how should I type this?", "why does this type error happen?",
   or any architectural decision involving TypeScript in a frontend context.
+metadata:
+  source: https://skillmd.com/skills/leejpsd/typescript-react-nextjs-patterns
 ---
-
 
 # TypeScript for React & Next.js — Agent Skill
 

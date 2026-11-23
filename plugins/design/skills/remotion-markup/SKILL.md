@@ -2,6 +2,7 @@
 name: remotion-markup
 description: Best practices for writing Remotion React Markup
 metadata:
+  source: https://skillmd.com/skills/remotion-dev/remotion-markup
   tags: remotion, react, markup
 ---
 

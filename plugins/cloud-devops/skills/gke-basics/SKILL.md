@@ -5,10 +5,10 @@ description: >-
 source: google/skills
 tags: [gcp, kubernetes, gke, container, orchestration]
 metadata: 
+  source: https://skillmd.com/skills/loopyluci/gke-basics
 hermes: 
 
 ---
-
 
 **Trigger**: Use when working with Google Kubernetes Engine basics — cluster setup, node pools, workloads, networking, and storage fundamentals.
 

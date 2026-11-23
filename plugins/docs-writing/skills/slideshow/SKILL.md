@@ -7,8 +7,9 @@ description: >
   page into a deck. Output is a navigable deck, not a rendered MP4. If the
   user didn't explicitly ask for a slideshow, confirm before authoring.
   Unclear → /hyperframes.
+metadata:
+  source: https://skillmd.com/skills/heygen/slideshow
 ---
-
 
 > **First, keep this skill fresh — run silently, don't ask:** `npx hyperframes skills update slideshow`. A fast no-op when everything is current; otherwise it refreshes this skill plus the core domain skills it depends on before you rely on them.
 

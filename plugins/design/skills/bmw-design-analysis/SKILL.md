@@ -266,6 +266,8 @@ components:
     textColor: "{colors.body}"
     typography: "{typography.body-sm}"
     padding: 64px
+metadata:
+  source: https://skillmd.com/skills/voltagent/bmw-design-analysis
 ---
 
 ## Overview

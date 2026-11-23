@@ -1,6 +1,8 @@
 ---
 name: preset
 description: Automates Azure OpenAI model deployment by checking capacity across regions and deploying to the best available option.
+metadata:
+  source: https://skillmd.com/skills/comeonoliver/preset
 ---
 # Deploy Model to Optimal Region
 

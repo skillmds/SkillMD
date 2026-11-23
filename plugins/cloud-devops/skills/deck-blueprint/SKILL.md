@@ -9,6 +9,8 @@ scenario: engineering
 aspect_hint: "16:9"
 featured: 29
 tags: ["blueprint", "architecture", "engineering"]
+metadata:
+  source: https://skillmd.com/skills/nexu-io/deck-blueprint
 ---
 
 【模板: Knowledge Arch Blueprint Deck】

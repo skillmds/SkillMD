@@ -12,6 +12,7 @@ description: >
   with 封面/cover/图片, OR when user uploads a reference image and asks
   about creating a similar style.
 metadata:
+  source: https://skillmd.com/skills/vivixiao980/xhs-cover
   openclaw:
     requires:
       bins:

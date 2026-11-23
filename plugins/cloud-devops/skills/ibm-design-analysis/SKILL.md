@@ -257,8 +257,9 @@ components:
     typography: "{typography.body-sm}"
     rounded: "{rounded.none}"
     padding: 64px 32px
+metadata:
+  source: https://skillmd.com/skills/voltagent/ibm-design-analysis
 ---
-
 
 ## Overview
 

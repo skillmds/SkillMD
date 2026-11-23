@@ -5,11 +5,14 @@ description: ""
 github_stars: 12621
 verification: "security_reviewed"
 source: "https://github.com/dbt-labs/dbt-core"
+author: "dbt Labs"
 category: "Data Extraction & Transformation"
 framework: "MCP"
 tool_ecosystem:
   github_repo: "dbt-labs/dbt-core"
   github_stars: 12621
+metadata:
+  source: https://skillmd.com/skills/agentskillexchange/dbt-cloud-mcp
 ---
 
 # dbt Cloud MCP

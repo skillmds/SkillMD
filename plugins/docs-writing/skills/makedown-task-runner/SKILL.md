@@ -11,6 +11,8 @@ framework: "Claude Code"
 tool_ecosystem:
   github_repo: "tzador/makedown"
   github_stars: 319
+metadata:
+  source: https://skillmd.com/skills/agentskillexchange/makedown-task-runner
 ---
 
 # Makedown Task Runner

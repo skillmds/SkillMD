@@ -1,8 +1,9 @@
 ---
 name: infrastructure-drift-detection
 description: "Drift is the divergence between declared infrastructure and live infrastructure."
+metadata:
+  source: https://skillmd.com/skills/snoodleboot-io/infrastructure-drift-detection
 ---
-
 
 # Infrastructure Drift Detection (Verbose)
 

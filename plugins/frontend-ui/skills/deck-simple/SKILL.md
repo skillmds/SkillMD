@@ -8,6 +8,8 @@ category: slides
 scenario: product
 aspect_hint: "16:9"
 tags: ["deck", "simple", "swipe"]
+metadata:
+  source: https://skillmd.com/skills/nexu-io/deck-simple
 ---
 
 【模板: Simple Deck】

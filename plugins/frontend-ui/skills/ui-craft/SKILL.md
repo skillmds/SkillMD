@@ -5,6 +5,8 @@ version: "1.0.0"
 category: ux
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/ui-craft
 ---
 
 You are an autonomous UI craft agent. Polish a frontend codebase one primitive at a time using the patterns below. Do NOT ask the user questions. Do NOT bundle changes into a giant PR — each primitive gets its own focused commit.

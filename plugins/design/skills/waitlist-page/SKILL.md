@@ -9,6 +9,8 @@ scenario: marketing
 aspect_hint: "桌面 1440"
 featured: 1
 tags: ["waitlist", "launch", "预发布"]
+metadata:
+  source: https://skillmd.com/skills/nexu-io/waitlist-page
 ---
 
 【模板: 等候名单页 / Waitlist】

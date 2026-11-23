@@ -5,8 +5,9 @@ description: |
   触发方式：/dbs-report、/出报告、「打包」「整理一份」「给合伙人看的」
   Generate a deliverable diagnosis report by merging all dbs-save snapshots.
   Trigger: /dbs-report, "package this up", "make me a report"
+metadata:
+  source: https://skillmd.com/skills/dontbesilent2025/dbs-report
 ---
-
 
 # dbs-report：诊断报告
 

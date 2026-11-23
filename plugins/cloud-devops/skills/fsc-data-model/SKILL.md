@@ -33,8 +33,9 @@ dependencies:
 version: 1.0.0
 author: Pranav Nagrecha
 updated: 2026-04-11
+metadata:
+  source: https://skillmd.com/skills/pranavnagrecha/fsc-data-model
 ---
-
 
 # FSC Data Model
 

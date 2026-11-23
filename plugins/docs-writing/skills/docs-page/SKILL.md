@@ -8,6 +8,8 @@ category: doc
 scenario: engineering
 aspect_hint: "桌面 1440"
 tags: ["docs", "api", "tutorial", "guide"]
+metadata:
+  source: https://skillmd.com/skills/nexu-io/docs-page
 ---
 
 【模板: 技术文档页】

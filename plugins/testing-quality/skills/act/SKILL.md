@@ -1,8 +1,9 @@
 ---
 name: act
 description: Test GitHub Actions locally using act. Use when debugging workflows locally, testing workflow changes before pushing, or troubleshooting action failures.
+metadata:
+  source: https://skillmd.com/skills/majiayu000/act
 ---
-
 
 # act - Local GitHub Actions Testing
 

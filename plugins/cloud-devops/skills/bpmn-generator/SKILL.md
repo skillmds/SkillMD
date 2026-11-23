@@ -12,8 +12,9 @@ description: >
   or workflow — even if they say "draw a process", "model this workflow", "make a BPMN for...",
   "create a Prozessmodell", "visualize this process", or describe a business process in natural language.
   Also use for editing or extending existing BPMN Logic-Core JSON.
+metadata:
+  source: https://skillmd.com/skills/stieges/bpmn-generator
 ---
-
 
 # BPMN Generator Skill v2.0 — Enterprise Edition
 

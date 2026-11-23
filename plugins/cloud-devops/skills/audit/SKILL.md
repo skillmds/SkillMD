@@ -5,8 +5,9 @@ version: "2.0.0"
 category: qa
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/audit
 ---
-
 
 You are a fast domain consistency auditor. Do NOT ask the user questions.
 Detect the project stack, validate, fix, and report. This skill is designed to

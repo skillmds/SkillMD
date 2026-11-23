@@ -1,6 +1,8 @@
 ---
 name: ads-landing
 description: "Audit paid-ad landing pages for message match, mobile experience, performance, accessibility, trust, forms, consent, tracking, security, and conversion friction. Use for landing-page audit, post-click experience, LP audit, conversion-rate optimization, form optimization, ad-to-page message match, redirects, blocked navigation, or requests involving private, loopback, link-local, or metadata IP destinations."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-landing
 ---
 
 # Landing-Page Audit

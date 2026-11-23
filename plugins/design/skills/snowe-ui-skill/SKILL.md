@@ -2,12 +2,17 @@
 name: snowe-ui-skill
 slug: "snowe-ui-skill"
 description: "Architecture-first UI/UX design skill for Codex that helps agents reason from product truth, user journeys, causal design decisions, art direction, interaction, responsive behavior, imagery, iconography, and motion before implementation, then validate the result through rendered browser critique."
+github_stars: 7
 verification: "listed"
 source: "https://github.com/What0ff/snowe-ui-skill"
+author: "What0ff"
 category: "Developer Tools"
 framework: "Codex"
 tool_ecosystem:
   github_repo: "what0ff/snowe-ui-skill"
+  github_stars: 7
+metadata:
+  source: https://skillmd.com/skills/agentskillexchange/snowe-ui-skill
 ---
 
 # Snowe UI Skill
@@ -28,7 +33,10 @@ Snowe is not a category-to-style generator or a landing-page recipe system. Its 
 
 ## Installation
 
-No source-backed install or usage instructions could be extracted automatically. Review the upstream project before running this skill in a sensitive workflow.
+Install or set up from the source-backed instructions:
+
+git clone https://github.com/What0ff/snowe-ui-skill.git
+python3 snowe-ui-skill/scripts/install_skill.py
 
 - Source: https://github.com/What0ff/snowe-ui-skill
 

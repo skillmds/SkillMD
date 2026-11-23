@@ -1,8 +1,9 @@
 ---
 name: wowerpoint
 description: Turn one document into a kawaii NotebookLM slide-deck PDF. Use for "wowerpoint this", "make a deck about <file>", "turn this report into slides", or any request to render a single document as shareable narrative slides.
+metadata:
+  source: https://skillmd.com/skills/thedotmack/wowerpoint
 ---
-
 
 # Wowerpoint
 

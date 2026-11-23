@@ -1,8 +1,9 @@
 ---
 name: serenity
 description: 用 Serenity(@aleabitoreddit)的"供应链卡点逆向"投资逻辑分析股票/板块——帮你判断该怎么分析、往哪一层挖、什么会证实或证伪、值不值得投。把市场当物理系统而非代码列表,先建 thesis 再谈标的。当用户聊美股/AI 供应链/光模块(CPO/硅光/InP)/半导体/内存/NeoCloud/电力液冷/机器人等 AI 全产业链任意细分的投资分析,或主动 /serenity 时使用。
+metadata:
+  source: https://skillmd.com/skills/zadanthony/serenity
 ---
-
 
 # Serenity 投资分析引擎
 

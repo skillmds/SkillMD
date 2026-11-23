@@ -1,6 +1,8 @@
 ---
 name: ue
 description: UE (user experience engineering) skill for defining end-to-end user experience behavior and interaction logic. Use for tasks like flow design, interaction models, state machines, error recovery, input validation, usability heuristics, accessibility, and turning UX intent into testable acceptance criteria for implementation.
+metadata:
+  source: https://skillmd.com/skills/majiayu000/ue
 ---
 
 # ue

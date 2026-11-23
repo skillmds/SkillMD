@@ -1,6 +1,8 @@
 ---
 name: ads-server-side-tracking
 description: "Audit server-side paid-media measurement including server-side tag management, platform conversion APIs, event taxonomy, browser/server deduplication, consent, hashing, data quality, observability, and privacy. Use for server-side tracking, sGTM, server-side tagging, CAPI, Events API, event_id, pixel debugging, first-party measurement, or conversion data loss."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-server-side-tracking
 ---
 
 # Server-Side Tracking Audit

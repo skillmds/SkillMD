@@ -4,6 +4,7 @@ description: Create beautiful, accessible user interfaces with shadcn/ui compone
 argument-hint: "[component or layout]"
 license: MIT
 metadata:
+  source: https://skillmd.com/skills/nextlevelbuilder/ui-styling
   author: claudekit
   version: "1.0.0"
 ---

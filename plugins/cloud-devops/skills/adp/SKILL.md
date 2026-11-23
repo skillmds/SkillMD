@@ -11,8 +11,9 @@ description: >-
   reading agent transcripts and spending insights, and wiring OAuth clients or providers
   to the aigw Authorization Server. For the separate rpk cloud mcp control-plane MCP
   server, see `/redpanda:rpk-cloud`.
+metadata:
+  source: https://skillmd.com/skills/redpanda-data/adp
 ---
-
 
 # Agentic Data Plane
 

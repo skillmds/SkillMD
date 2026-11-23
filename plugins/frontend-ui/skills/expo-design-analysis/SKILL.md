@@ -262,6 +262,8 @@ components:
     backgroundColor: transparent
     textColor: "{colors.body}"
     typography: "{typography.body-sm}"
+metadata:
+  source: https://skillmd.com/skills/voltagent/expo-design-analysis
 ---
 
 ## Overview

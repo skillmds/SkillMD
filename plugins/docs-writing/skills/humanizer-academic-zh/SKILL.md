@@ -1,8 +1,9 @@
 ---
 name: humanizer-academic-zh
 description: Humanizer 中文学术版——当用户要求润色论文、去除AI味、降低AIGC检测率，或说"帮我改改这段""这段读起来像AI写的"时触发。
+metadata:
+  source: https://skillmd.com/skills/cangtianhuang/humanizer-academic-zh
 ---
-
 
 # Humanizer 中文学术版
 

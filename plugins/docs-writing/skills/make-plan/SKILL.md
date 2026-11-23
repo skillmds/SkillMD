@@ -1,8 +1,9 @@
 ---
 name: make-plan
 description: Create a detailed, phased implementation plan with documentation discovery. Use when asked to plan a feature, task, or multi-step implementation — especially before executing with do.
+metadata:
+  source: https://skillmd.com/skills/thedotmack/make-plan
 ---
-
 
 # Make Plan
 

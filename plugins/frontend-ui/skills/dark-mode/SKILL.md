@@ -5,6 +5,8 @@ version: "2.0.0"
 category: ux
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/dark-mode
 ---
 
 You are in AUTONOMOUS MODE. Do NOT ask questions. Execute the full pipeline below

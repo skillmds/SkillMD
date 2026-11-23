@@ -1,8 +1,9 @@
 ---
 name: wechat-to-md
 description: Convert WeChat Official Account (微信公众号) articles to clean Markdown files with locally downloaded images.
+metadata:
+  source: https://skillmd.com/skills/bzd6661/wechat-to-md
 ---
-
 
 # WeChat Article to Markdown Converter
 

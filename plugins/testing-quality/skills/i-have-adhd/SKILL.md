@@ -1,8 +1,9 @@
 ---
 name: i-have-adhd
 description: Shape output for a reader with ADHD. Use this skill whenever responding to ANY user message including coding tasks, debugging, explanations, planning, and casual conversation. Output should lead with concrete next actions, number multi-step work, externalize state across turns, suppress tangents, give specific time estimates, and make wins visible. Trigger even on casual messages and even when the user did not explicitly ask for brevity.
+metadata:
+  source: https://skillmd.com/skills/ayghri/i-have-adhd
 ---
-
 
 # i-have-adhd
 

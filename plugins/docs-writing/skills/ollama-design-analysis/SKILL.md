@@ -243,8 +243,9 @@ components:
     typography: "{typography.heading-lg}"
     rounded: "{rounded.lg}"
     padding: 24px 32px
+metadata:
+  source: https://skillmd.com/skills/voltagent/ollama-design-analysis
 ---
-
 
 ## Overview
 

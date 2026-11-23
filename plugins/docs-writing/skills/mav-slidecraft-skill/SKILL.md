@@ -1,8 +1,9 @@
 ---
 name: mav-slidecraft-skill
 description: Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch.
+metadata:
+  source: https://skillmd.com/skills/maverickgao8848/mav-slidecraft-skill
 ---
-
 
 # mav-slidecraft-skill
 

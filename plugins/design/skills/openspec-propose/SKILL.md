@@ -4,6 +4,7 @@ description: Propose a new change with all artifacts generated in one step. Use 
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
+  source: https://skillmd.com/skills/tbdavid2019/openspec-propose
   author: openspec
   version: "1.0"
   generatedBy: "1.2.0"

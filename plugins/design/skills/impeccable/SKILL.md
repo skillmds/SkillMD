@@ -7,6 +7,8 @@ argument-hint: "[craft|shape · audit|critique · animate|bolder|colorize|deligh
 license: Apache-2.0
 allowed-tools:
   - Bash(npx impeccable *)
+metadata:
+  source: https://skillmd.com/skills/samyakjhaveri/impeccable
 ---
 
 Designs and iterates production-grade frontend interfaces. Real working code, committed design choices, exceptional craft.

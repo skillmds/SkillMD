@@ -1,8 +1,9 @@
 ---
 name: sourcesage-cli
 description: Generate AI-friendly repository documentation with the SourceSage CLI. Use when Codex needs to run `sage` or `sourcesage` to create `.SourceSageAssets/Repository_summary.md`, analyze the current repository or another local repository, switch the output language between English and Japanese, use `--lite` to keep the summary small, change the output directory, or optionally create a deprecated tag-diff release report with `--diff`.
+metadata:
+  source: https://skillmd.com/skills/sunwood-ai-labs/sourcesage-cli
 ---
-
 
 # SourceSage CLI
 

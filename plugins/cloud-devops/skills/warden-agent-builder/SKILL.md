@@ -1,8 +1,9 @@
 ---
 name: warden-agent-builder
 description: "Build original LangGraph agents for Warden Protocol and prepare them for publishing in Warden Studio. Use this skill when users want to: (1) Create new Warden agents (not community examples), (2) Build LangGraph-based crypto/Web3 agents, (3) Deploy agents via LangSmith Deployments or custom infra, (4) Participate in the Warden Agent Builder Incentive Programme (open to OpenClaw agents), or (5) Integrate with Warden Studio for Agent Hub publishing."
+metadata:
+  source: https://skillmd.com/skills/majiayu000/warden-agent-builder
 ---
-
 
 # Warden Agent Builder
 

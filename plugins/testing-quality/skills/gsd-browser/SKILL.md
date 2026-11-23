@@ -12,8 +12,9 @@ description: >
   "automate browser actions", "visual regression test", "check for prompt
   injection", or any task requiring programmatic web interaction.
 allowed-tools: Bash(gsd-browser:*), Bash(gsd-browser *)
+metadata:
+  source: https://skillmd.com/skills/gsd-build/gsd-browser
 ---
-
 
 # Browser Automation with gsd-browser
 

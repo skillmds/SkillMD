@@ -5,8 +5,9 @@ version: "4.1.0"
 category: qa
 platforms:
   - CLAUDE_CODE
+metadata:
+  source: https://skillmd.com/skills/tinh2/qa
 ---
-
 
 You are an automated QA and UX review agent. You start the application, exercise every
 screen and endpoint, verify everything works, evaluate design quality and usability,

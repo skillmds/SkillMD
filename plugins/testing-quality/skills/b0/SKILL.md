@@ -9,8 +9,9 @@ description: |
   "get opinions from", or "have someone".
 allowed-tools:
   - Bash
+metadata:
+  source: https://skillmd.com/skills/risingwavelabs/b0
 ---
-
 
 # Box0 (`b0`) Multi-Agent Platform
 

@@ -13,6 +13,8 @@ example_name: "营销海报 · 产品发布"
 example_format: markdown
 example_tagline: "9:16 朋友圈分享图"
 example_desc: "高对比度发布海报, 含 QR 码占位 + 渐变 mesh + 噪点纹理"
+metadata:
+  source: https://skillmd.com/skills/nexu-io/poster-hero
 ---
 
 【模板: 营销海报】

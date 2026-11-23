@@ -12,8 +12,9 @@ description: >-
   並對任何圖表用原始數據重算統計值、抓出原文寫錯的數字。
   Also use it whenever the user needs figures or charts from a report recomputed from the source data rather than trusted blindly.
   也支援 Keynote Magic Move 式的 Morph Transition 轉場（使用者說「Magic Move」「Morph」「物件飛過去的轉場」時）。
+metadata:
+  source: https://skillmd.com/skills/yu-0312/ppt-creater-skill
 ---
-
 
 # 簡報工作流（凌亂文件 → 設計感簡報）
 

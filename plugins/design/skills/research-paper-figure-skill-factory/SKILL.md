@@ -3,6 +3,7 @@ name: research-paper-figure-skill-factory
 license: MIT-0
 description: "Use when the user wants a research-paper figure Skill Factory: build, patch, package, or use reusable specialized paper-figure-making skills from lawful literature/corpus evidence. Generated skills must use a specialized-skill-first workflow, full-feasible local PDF coverage where available, startup-plan-only first replies, target-paper candidate/final image isolation, mandatory image-embedded visual-structure explanation, mandatory non-target concept/modeling example display for abstract visual decisions, saved subtype/style illustration atlases, ChatGPT web Create image / ChatGPT Images 2.0 rendering, Codex $imagegen-first rendering, sample-image transfer rules, all-step/current-position state footers, and a mandatory first-round diverse candidate board followed by P6b/P6c paper-local best-practice optimization before final prompt construction."
 metadata:
+  source: https://skillmd.com/skills/c-narcissus/research-paper-figure-skill-factory
   display_name: Research Paper Figure Skill Factory
   version: "2.0.5"
   author: OpenAI

@@ -7,8 +7,9 @@ description: |
   Fargate vs EC2 comparison, and queue priority analysis.
 connection_type: aws
 preload: false
+metadata:
+  source: https://skillmd.com/skills/cloudthinker-ai/aws-batch
 ---
-
 
 # AWS Batch Skill
 

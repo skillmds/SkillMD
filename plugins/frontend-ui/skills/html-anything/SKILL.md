@@ -5,6 +5,7 @@ version: 0.1.0
 homepage: https://github.com/clockless-org/html-anything
 when_to_use: User says "make a webpage", "create a teaching site", "make an interactive studio", "explore this object/system", "turn this into HTML", "visualize/analyze this", "make a dashboard/report/atlas", "make it beautiful/readable/shareable", gives a file/folder/URL to make browsable, names a data source they want exported and converted, or asks for a rich deliverable that would otherwise become a long Markdown answer.
 metadata:
+  source: https://skillmd.com/skills/clockless-org/html-anything
   openclaw:
     emoji: "🧩"
     homepage: https://github.com/clockless-org/html-anything

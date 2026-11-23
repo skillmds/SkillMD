@@ -4,6 +4,8 @@ description: Comprehensive integration skill for building sites with SvelteKit 2
 version: 1.0.0
 scope: integration
 distribution: author-only
+metadata:
+  source: https://skillmd.com/skills/claude-skills/sveltekit-svelte5-tailwind-skill
 ---
 
 # SvelteKit 2 + Svelte 5 + Tailwind v4 Integration Skill

@@ -61,8 +61,9 @@ skip:
   - "no need"
   - "不用记"
   - "算了"
+metadata:
+  source: https://skillmd.com/skills/goldentrii/agent-recall
 ---
-
 
 # AgentRecall v3.4.30 — Usage Guide
 

@@ -5,8 +5,9 @@ disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent
 argument-hint: "[scope description]"
+metadata:
+  source: https://skillmd.com/skills/the-oasis-project/review
 ---
-
 
 # Code Review + Fix Skill
 

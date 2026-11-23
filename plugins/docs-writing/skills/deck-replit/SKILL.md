@@ -15,6 +15,8 @@ example_tagline: "Replit Slides 八套主题之一"
 example_desc: "World Mint 主题封页 + agenda 双页, sans + neon mint accent"
 example_source_url: "https://replit.com/slides"
 example_source_label: "Replit Slides"
+metadata:
+  source: https://skillmd.com/skills/nexu-io/deck-replit
 ---
 
 【模板: Replit Slides Style Deck】

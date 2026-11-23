@@ -1,6 +1,8 @@
 ---
 name: kinetic-multicam
 description: Use when the user drops or points at a local talking-head video and wants the kinetic supers + rapid camera reposition prompt for video-to-video AI (one real take turned into split-second camera snaps that lock off, with bold motion-graphics text synced to the speech). Triggers on /kinetic-multicam, "kinetic supers", "kinetic typography video", a dropped .mp4 plus a motion-graphics-text + camera request. PT examples for reliability, "faz o prompt de kinetic supers desse vídeo", "gera supers cinéticos com cortes de câmera", "bota motion graphics e câmera nesse take".
+metadata:
+  source: https://skillmd.com/skills/aipauloshimas/kinetic-multicam
 ---
 
 # /kinetic-multicam: One Take → Kinetic Supers + Camera Snaps

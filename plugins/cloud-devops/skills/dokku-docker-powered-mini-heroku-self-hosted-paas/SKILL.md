@@ -11,6 +11,8 @@ framework: "Custom Agents"
 tool_ecosystem:
   github_repo: "dokku/dokku"
   github_stars: 31865
+metadata:
+  source: https://skillmd.com/skills/agentskillexchange/dokku-docker-powered-mini-heroku-self-hosted-paas
 ---
 
 # Dokku Docker-Powered Mini-Heroku Self-Hosted PaaS

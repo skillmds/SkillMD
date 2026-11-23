@@ -24,6 +24,7 @@ context:
     - TASK
   intel_scope: none
 metadata:
+  source: https://skillmd.com/skills/majiayu000/push
   tier: execution
   dependencies: []
   triggers:

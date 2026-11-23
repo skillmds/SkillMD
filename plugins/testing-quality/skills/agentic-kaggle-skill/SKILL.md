@@ -1,8 +1,9 @@
 ---
 name: agentic-kaggle-skill
 description: Kaggle-first end-to-end competition workflow for scored submissions. Use when Codex must run Kaggle or competitive ML workflows through scored submission, including code competitions, validation, metrics, policy-safe public notebook/discussion intel, tabular/text/image modeling, tuning, ensembling/stacking, proactive multi-notebook architectures, producer notebooks that train models and export private Kaggle artifact datasets, downstream consumer notebooks, Kaggle GPU offload, kagglehub access, hidden-test debugging, and public score retrieval.
+metadata:
+  source: https://skillmd.com/skills/franks-intellab/agentic-kaggle-skill
 ---
-
 
 # Agentic Kaggle Skill
 

@@ -1,8 +1,9 @@
 ---
 name: iota-agent-mcp
 description: "IOTA blockchain MCP server providing wallet management with human-in-the-loop signing, Move smart contract build/test/publish, and on-chain queries via JSON-RPC and GraphQL. Use when interacting with IOTA network from AI coding agents, managing IOTA wallets, building or publishing Move packages, querying on-chain objects or transactions, or checking epoch and network statistics."
+metadata:
+  source: https://skillmd.com/skills/scottcjn/iota-agent-mcp
 ---
-
 
 # IOTA Agent MCP
 

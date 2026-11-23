@@ -11,6 +11,8 @@ description: >
   Trigger phrases: "is this true?", "is this fake?", "fact check this",
   "compare these sources", "проверка на факти", "истина ли е", "дезинформация ли е",
   "сравни тези източници".
+metadata:
+  source: https://skillmd.com/skills/petar-nauka/fact-check
 ---
 
 # Fact Check

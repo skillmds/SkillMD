@@ -3,6 +3,7 @@ name: surrealism
 description: "SurrealDB Surrealism WASM extension development. Write Rust functions, compile to WASM, deploy as database modules. Part of the surreal-skills collection."
 license: MIT
 metadata:
+  source: https://skillmd.com/skills/24601/surrealism
   version: "1.7.1"
   author: "24601"
   parent_skill: "surrealdb"
@@ -13,7 +14,6 @@ metadata:
     sha: "a97d3af85d79"
     docs: "https://surrealdb.com/docs/surrealdb/extensions"
 ---
-
 
 # Surrealism -- WASM Extensions for SurrealDB
 

@@ -4,6 +4,7 @@ description: "Expert SurrealDB 3 architect and developer skill (tracks v3.1.4+).
 version: "1.7.1"
 license: MIT
 metadata:
+  source: https://skillmd.com/skills/24601/surrealdb
   version: "1.7.1"
   author: "24601"
   snapshot_date: "2026-06-17"

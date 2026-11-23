@@ -261,8 +261,9 @@ components:
     typography: "{typography.caption}"
     rounded: "{rounded.xs}"
     padding: 64px 32px
+metadata:
+  source: https://skillmd.com/skills/voltagent/hashicorp-design-analysis
 ---
-
 
 ## Overview
 

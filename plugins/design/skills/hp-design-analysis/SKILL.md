@@ -321,6 +321,8 @@ components:
     textColor: "{colors.on-primary}"
     typography: "{typography.body-md}"
     padding: 64px 32px
+metadata:
+  source: https://skillmd.com/skills/voltagent/hp-design-analysis
 ---
 
 ## Overview

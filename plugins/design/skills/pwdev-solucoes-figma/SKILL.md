@@ -5,6 +5,8 @@ description: >
   READ: extract tokens, map Vue/Reka UI components, translate Auto Layout to Tailwind.
   WRITE: push components, screens, and design tokens from code to Figma.
   Requires /figma:figma-use skill before every use_figma call.
+metadata:
+  source: https://skillmd.com/skills/pwdev-solucoes/figma
 ---
 
 # Skill: Figma ↔ Vue 3 + shadcn-vue

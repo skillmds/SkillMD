@@ -15,8 +15,9 @@ tags:
   - sandbox
 dependencies: []
 last_updated: 2026-03-04
+metadata:
+  source: https://skillmd.com/skills/systemtce/04-security
 ---
-
 
 # Dify 安全和部署 SKILL
 

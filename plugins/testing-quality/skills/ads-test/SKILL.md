@@ -1,6 +1,8 @@
 ---
 name: ads-test
 description: "Design and evaluate paid-ad experiments with hypotheses, randomization units, sample-size and duration assumptions, guardrails, platform experiment tools, analysis, and decision rules. Use for A/B test, split test, experiment design, hypothesis, statistical significance, sample size, test duration, or experiment readout."
+metadata:
+  source: https://skillmd.com/skills/agricidaniel/ads-test
 ---
 
 # Paid Media Experiment

@@ -4,7 +4,132 @@ description: "Use this skill whenever the user asks for an HTML-first visual des
 version: "3.0.0"
 license: "Apache-2.0 WITH brand-clause"
 homepage: "https://github.com/peixl/ifq-design-skills"
-metadata: {"author":"ifq.ai","version":"3.0.0","homepage":"https://github.com/peixl/ifq-design-skills","category":"creative","tags":["design","html","prototype","slides","motion","infographic","dashboard","brand","pptx","pdf","svg","mp4","gif","ifq"],"openclaw":{"category":"creative","tags":["design","html","prototype","slides","motion","infographic","dashboard","brand","pptx","pdf","svg","mp4","gif","ifq"],"homepage":"https://github.com/peixl/ifq-design-skills","requires":{"bins":["node"],"env":[]},"primaryEnv":null},"hermes":{"category":"creative","tags":["design","html","prototype","slides","motion","infographic","dashboard","brand","pptx","pdf","svg","mp4","gif","ifq"]},"clawhub":{"category":"creative","tags":["design","html","prototype","brand"],"requires":{"bins":["node"],"env":[]},"capability_signals":{"crypto":false,"can_make_purchases":false,"requires_sensitive_credentials":false},"audit":"passes-static-security-scan"},"agentskills":{"standard":"agentskills.io/v1"},"capabilities":{"read_files":true,"write_files":true,"run_shell":"optional","network":"optional_fact_checks_only","dynamic_eval":false,"silent_install":false,"persistent_background":false},"permissions":{"filesystem":{"read":["{baseDir}/**"],"write":["${workspace}/**"]},"shell_allowlist":["npm run preview","npm run verify:lite","npm run smoke","npm run validate","npm run install:export","ffmpeg"],"network_allowlist":["web_search","https://fonts.googleapis.com","https://fonts.gstatic.com","https://unpkg.com","https://cdn.jsdelivr.net"]},"security":{"audit_clean":true,"node_python_process_control":false,"dynamic_eval":false,"script_network":false,"secrets_in_repo":false,"zero_install_core_loop":true},"entrypoints":["SKILL.md","references/modes.md","assets/templates/INDEX.json"],"compatibility":["claude_code","codex_cli","opencode","openclaw","hermes","cursor","codebuddy","generic"]}
+metadata:
+  source: https://skillmd.com/skills/peixl/ifq-design-skills
+  author: ifq.ai
+  version: 3.0.0
+  homepage: https://github.com/peixl/ifq-design-skills
+  category: creative
+  tags:
+    - design
+    - html
+    - prototype
+    - slides
+    - motion
+    - infographic
+    - dashboard
+    - brand
+    - pptx
+    - pdf
+    - svg
+    - mp4
+    - gif
+    - ifq
+  openclaw:
+    category: creative
+    tags:
+      - design
+      - html
+      - prototype
+      - slides
+      - motion
+      - infographic
+      - dashboard
+      - brand
+      - pptx
+      - pdf
+      - svg
+      - mp4
+      - gif
+      - ifq
+    homepage: https://github.com/peixl/ifq-design-skills
+    requires:
+      bins:
+        - node
+      env: []
+    primaryEnv: null
+  hermes:
+    category: creative
+    tags:
+      - design
+      - html
+      - prototype
+      - slides
+      - motion
+      - infographic
+      - dashboard
+      - brand
+      - pptx
+      - pdf
+      - svg
+      - mp4
+      - gif
+      - ifq
+  clawhub:
+    category: creative
+    tags:
+      - design
+      - html
+      - prototype
+      - brand
+    requires:
+      bins:
+        - node
+      env: []
+    capability_signals:
+      crypto: false
+      can_make_purchases: false
+      requires_sensitive_credentials: false
+    audit: passes-static-security-scan
+  agentskills:
+    standard: agentskills.io/v1
+  capabilities:
+    read_files: true
+    write_files: true
+    run_shell: optional
+    network: optional_fact_checks_only
+    dynamic_eval: false
+    silent_install: false
+    persistent_background: false
+  permissions:
+    filesystem:
+      read:
+        - "{baseDir}/**"
+      write:
+        - ${workspace}/**
+    shell_allowlist:
+      - npm run preview
+      - npm run verify:lite
+      - npm run smoke
+      - npm run validate
+      - npm run install:export
+      - ffmpeg
+    network_allowlist:
+      - web_search
+      - https://fonts.googleapis.com
+      - https://fonts.gstatic.com
+      - https://unpkg.com
+      - https://cdn.jsdelivr.net
+  security:
+    audit_clean: true
+    node_python_process_control: false
+    dynamic_eval: false
+    script_network: false
+    secrets_in_repo: false
+    zero_install_core_loop: true
+  entrypoints:
+    - SKILL.md
+    - references/modes.md
+    - assets/templates/INDEX.json
+  compatibility:
+    - claude_code
+    - codex_cli
+    - opencode
+    - openclaw
+    - hermes
+    - cursor
+    - codebuddy
+    - generic
 ---
 
 # IFQ Design Skills

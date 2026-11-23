@@ -12,7 +12,9 @@ tool_ecosystem:
   github_repo: "eslint/eslint"
   github_stars: 27264
   npm_package: "eslint"
-  npm_weekly_downloads: 135093798
+  npm_weekly_downloads: 205603449
+metadata:
+  source: https://skillmd.com/skills/agentskillexchange/eslint-code-review
 ---
 
 # ESLint Code Review

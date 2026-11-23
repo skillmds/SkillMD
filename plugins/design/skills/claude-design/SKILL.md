@@ -9,6 +9,8 @@ category: creative
 tags: [design, html, prototype, ux, ui, creative, artifact, deck, motion, design-system]
 compatible: [claude-code, openai-agents, hermes-agent, autogen, langchain, any-llm]
 source: built-in
+metadata:
+  source: https://skillmd.com/skills/lord1egypt/claude-design
 ---
 
 # Claude Design for CLI/API Agents

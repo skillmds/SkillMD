@@ -2,8 +2,9 @@
 id: "d0c2f4dc-ba28-5086-8426-fc99a40a8341"
 name: systematic-debugging
 description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+metadata:
+  source: https://skillmd.com/skills/ecnu-icalk/systematic-debugging
 ---
-
 
 # Systematic Debugging
 

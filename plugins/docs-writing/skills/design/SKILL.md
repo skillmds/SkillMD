@@ -4,10 +4,10 @@ description: "Comprehensive design skill: brand identity, design tokens, UI styl
 argument-hint: "[design-type] [context]"
 license: MIT
 metadata:
+  source: https://skillmd.com/skills/nextlevelbuilder/design
   author: claudekit
   version: "2.1.0"
 ---
-
 
 # Design
 

@@ -1,6 +1,8 @@
 ---
 name: civitai-mcp-ultimate
 description: Ultimate MCP server for Civitai — search models, browse top images with prompts, download LoRAs/Checkpoints, analyze trends. Use when user asks about AI models, LoRAs, checkpoints, Stable Diffusion, Flux, image generation prompts, or Civitai.
+metadata:
+  source: https://skillmd.com/skills/timoncool/civitai-mcp-ultimate
 ---
 
 # Civitai MCP Ultimate — 14 Tools Reference
